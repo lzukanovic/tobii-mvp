@@ -8,7 +8,6 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 acquisition_service = None
 
-
 def init_routes(acq_service):
     global acquisition_service
     acquisition_service = acq_service

@@ -10,8 +10,8 @@ import logging
 
 from g3pylib import connect_to_glasses
 from models.device import DeviceStatus
-from services.async_bridge import run_coroutine_sync, run_coroutine, get_loop
-from config.settings import DEFAULT_GAZE_DECIMATION, DEFAULT_IMU_DECIMATION
+from services.async_bridge import run_coroutine_sync, run_coroutine
+from config.settings import DESIRED_GAZE_SAMPLING_RATE, DEFAULT_GAZE_DECIMATION, DEFAULT_IMU_DECIMATION
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,18 @@ class AcquisitionService:
 
         freqs = await self._g3.system.available_gaze_frequencies()
         if freqs:
-            self.status.gaze_freq = max(freqs)
+            # try to set desired frequency if available, otherwise use max available
+            if DESIRED_GAZE_SAMPLING_RATE in freqs:
+                await self._g3.settings.set_gaze_frequency(DESIRED_GAZE_SAMPLING_RATE)
+                self.status.gaze_freq = DESIRED_GAZE_SAMPLING_RATE
+            else:
+                max_freq = max(freqs)
+                await self._g3.settings.set_gaze_frequency(max_freq)
+                self.status.gaze_freq = max_freq
+                logger.warning(
+                    "Desired gaze frequency %d Hz not available, set to max available %d Hz",
+                    DESIRED_GAZE_SAMPLING_RATE, max_freq
+                )
 
         self.status.connected = True
         self.status.error = None

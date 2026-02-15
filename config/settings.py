@@ -22,6 +22,9 @@ G3_HOSTNAME = os.getenv('G3_HOSTNAME')
 # Data queue configuration
 DATA_QUEUE_MAX_SIZE = 2000
 
+# Desired sampling rate (actual rates depend on device capabilities)
+DESIRED_GAZE_SAMPLING_RATE = 100  # Hz
+
 # Decimation defaults (send every Nth sample to browser)
 DEFAULT_GAZE_DECIMATION = 2   # 50Hz / 2 = 25Hz to browser
 DEFAULT_IMU_DECIMATION = 5    # ~100Hz / 5 = 20Hz to browser
