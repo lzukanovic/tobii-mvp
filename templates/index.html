@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tobii Pro Glasses 3 - MVP</title>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.1.1/dist/chartjs-chart-matrix.min.js"></script>
     <style>
       * {
         margin: 0;
@@ -452,6 +453,10 @@
           <canvas id="gazeChart"></canvas>
         </div>
         <div class="chart-card">
+          <h3>Gaze Heatmap</h3>
+          <canvas id="heatmapChart"></canvas>
+        </div>
+        <div class="chart-card">
           <h3>Pupil Diameter</h3>
           <canvas id="pupilChart"></canvas>
         </div>
@@ -519,6 +524,118 @@
           },
         },
       );
+
+      // Gaze Heatmap - matrix chart
+      const HEATMAP_BINS = 20; // 20x20 grid
+      const heatmapGrid = Array.from(
+        { length: HEATMAP_BINS * HEATMAP_BINS },
+        () => 0,
+      );
+      let heatmapMax = 1;
+
+      function heatmapData() {
+        const data = [];
+        for (let row = 0; row < HEATMAP_BINS; row++) {
+          for (let col = 0; col < HEATMAP_BINS; col++) {
+            const v = heatmapGrid[row * HEATMAP_BINS + col];
+            if (v > 0) {
+              data.push({ x: col, y: row, v });
+            }
+          }
+        }
+        return data;
+      }
+
+      const heatmapChart = new Chart(
+        document.getElementById("heatmapChart").getContext("2d"),
+        {
+          type: "matrix",
+          data: {
+            datasets: [
+              {
+                label: "Gaze Density",
+                data: [],
+                width: ({ chart }) =>
+                  (chart.chartArea || {}).width / HEATMAP_BINS - 1,
+                height: ({ chart }) =>
+                  (chart.chartArea || {}).height / HEATMAP_BINS - 1,
+                backgroundColor: (ctx) => {
+                  const v = ctx.dataset.data[ctx.dataIndex]?.v || 0;
+                  const t = Math.min(v / Math.max(heatmapMax, 1), 1);
+                  // blue -> cyan -> green -> yellow -> red
+                  if (t < 0.25)
+                    return `rgba(0, ${Math.round(t * 4 * 200)}, 255, 0.8)`;
+                  if (t < 0.5)
+                    return `rgba(0, 200, ${Math.round((1 - (t - 0.25) * 4) * 255)}, 0.8)`;
+                  if (t < 0.75)
+                    return `rgba(${Math.round((t - 0.5) * 4 * 255)}, 200, 0, 0.8)`;
+                  return `rgba(255, ${Math.round((1 - (t - 0.75) * 4) * 200)}, 0, 0.9)`;
+                },
+                borderWidth: 0,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            animation: false,
+            scales: {
+              x: {
+                type: "linear",
+                min: -0.5,
+                max: HEATMAP_BINS - 0.5,
+                offset: false,
+                title: { display: true, text: "X" },
+                ticks: {
+                  stepSize: 5,
+                  callback: (v) => (v / HEATMAP_BINS).toFixed(1),
+                },
+                grid: { display: false },
+              },
+              y: {
+                type: "linear",
+                min: -0.5,
+                max: HEATMAP_BINS - 0.5,
+                offset: false,
+                reverse: true,
+                title: { display: true, text: "Y" },
+                ticks: {
+                  stepSize: 5,
+                  callback: (v) => (v / HEATMAP_BINS).toFixed(1),
+                },
+                grid: { display: false },
+              },
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: { enabled: false },
+            },
+          },
+        },
+      );
+
+      let heatmapCounter = 0;
+      const HEATMAP_REFRESH_EVERY = 10; // redraw every N gaze samples
+
+      function updateHeatmap(gazeX, gazeY) {
+        const col = Math.min(
+          Math.floor(gazeX * HEATMAP_BINS),
+          HEATMAP_BINS - 1,
+        );
+        const row = Math.min(
+          Math.floor(gazeY * HEATMAP_BINS),
+          HEATMAP_BINS - 1,
+        );
+        if (col < 0 || row < 0) return;
+        const idx = row * HEATMAP_BINS + col;
+        heatmapGrid[idx]++;
+        if (heatmapGrid[idx] > heatmapMax) heatmapMax = heatmapGrid[idx];
+
+        heatmapCounter++;
+        if (heatmapCounter % HEATMAP_REFRESH_EVERY === 0) {
+          heatmapChart.data.datasets[0].data = heatmapData();
+          heatmapChart.update("none");
+        }
+      }
 
       // Pupil diameter - dual line
       const pupilChart = new Chart(
@@ -807,6 +924,11 @@
           gazeChart.update("none");
         }
 
+        // Heatmap
+        if (d.gaze2d_x != null && d.gaze2d_y != null) {
+          updateHeatmap(d.gaze2d_x, d.gaze2d_y);
+        }
+
         // Pupil
         const labels = pupilChart.data.labels;
         const ts = new Date(d.ts * 1000).toLocaleTimeString();
@@ -963,6 +1085,12 @@
 
         gazeChart.data.datasets[0].data = [];
         gazeChart.update();
+
+        heatmapGrid.fill(0);
+        heatmapMax = 1;
+        heatmapCounter = 0;
+        heatmapChart.data.datasets[0].data = [];
+        heatmapChart.update();
 
         pupilChart.data.labels = [];
         pupilChart.data.datasets.forEach((ds) => (ds.data = []));
