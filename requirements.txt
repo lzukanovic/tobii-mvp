@@ -1,0 +1,6 @@
+Flask==3.0.0
+flask-socketio==5.3.5
+python-socketio==5.10.0
+eventlet==0.33.3
+g3pylib @ git+https://github.com/simp16/glasses3-pylib.git@d25271aa62d92dcbe5420bd83a9c9319e2d980a7
+python-dotenv==1.2.1

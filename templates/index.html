@@ -1,0 +1,1040 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tobii Pro Glasses 3 - MVP</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+          Cantarell, sans-serif;
+        background: linear-gradient(
+          135deg,
+          #0f2027 0%,
+          #203a43 50%,
+          #2c5364 100%
+        );
+        min-height: 100vh;
+        padding: 20px;
+        color: #333;
+      }
+
+      .container {
+        max-width: 1500px;
+        margin: 0 auto;
+      }
+
+      .header {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      .header h1 {
+        color: #2c5364;
+        margin-bottom: 8px;
+        font-size: 28px;
+      }
+      .header p {
+        color: #666;
+        font-size: 14px;
+      }
+
+      .panel {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      .panel h2 {
+        color: #333;
+        margin-bottom: 15px;
+        font-size: 18px;
+      }
+
+      .status-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-bottom: 15px;
+      }
+      .status-item {
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 8px;
+        border-left: 4px solid #2c5364;
+      }
+      .status-item .label {
+        font-size: 11px;
+        color: #666;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+      }
+      .status-item .value {
+        font-size: 20px;
+        font-weight: bold;
+        color: #333;
+      }
+      .status-item.ok {
+        border-left-color: #10b981;
+      }
+      .status-item.warn {
+        border-left-color: #f59e0b;
+      }
+      .status-item.off {
+        border-left-color: #ef4444;
+      }
+
+      .controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+      }
+
+      .input-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .input-group label {
+        font-size: 12px;
+        color: #666;
+        font-weight: 500;
+      }
+      .input-group input,
+      .input-group select {
+        padding: 8px 12px;
+        border: 2px solid #e5e7eb;
+        border-radius: 6px;
+        font-size: 14px;
+      }
+      .input-group input:focus,
+      .input-group select:focus {
+        outline: none;
+        border-color: #2c5364;
+      }
+
+      button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+      .btn-connect {
+        background: #2c5364;
+        color: white;
+      }
+      .btn-connect:hover:not(:disabled) {
+        background: #203a43;
+      }
+      .btn-disconnect {
+        background: #ef4444;
+        color: white;
+      }
+      .btn-disconnect:hover:not(:disabled) {
+        background: #dc2626;
+      }
+      .btn-start {
+        background: #10b981;
+        color: white;
+      }
+      .btn-start:hover:not(:disabled) {
+        background: #059669;
+      }
+      .btn-stop {
+        background: #ef4444;
+        color: white;
+      }
+      .btn-stop:hover:not(:disabled) {
+        background: #dc2626;
+      }
+      .btn-calibrate {
+        background: #f59e0b;
+        color: white;
+      }
+      .btn-calibrate:hover:not(:disabled) {
+        background: #d97706;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .charts-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      .chart-card {
+        background: white;
+        border-radius: 12px;
+        padding: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      .chart-card h3 {
+        color: #333;
+        font-size: 15px;
+        margin-bottom: 8px;
+      }
+      .chart-card canvas {
+        max-height: 280px;
+      }
+
+      .error-message {
+        background: #fee2e2;
+        border: 1px solid #ef4444;
+        color: #991b1b;
+        padding: 12px 15px;
+        border-radius: 6px;
+        margin-bottom: 12px;
+        display: none;
+      }
+      .success-message {
+        background: #d1fae5;
+        border: 1px solid #10b981;
+        color: #065f46;
+        padding: 12px 15px;
+        border-radius: 6px;
+        margin-bottom: 12px;
+        display: none;
+      }
+
+      .indicator {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 6px;
+      }
+      .indicator.on {
+        background: #10b981;
+        animation: pulse 2s infinite;
+      }
+      .indicator.off {
+        background: #ef4444;
+      }
+      .indicator.warn {
+        background: #f59e0b;
+        animation: pulse 1s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      .calibration-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .recording-item {
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-left: 4px solid #2c5364;
+      }
+      .recording-info h3 {
+        font-size: 13px;
+        color: #333;
+        margin-bottom: 3px;
+      }
+      .recording-info p {
+        font-size: 12px;
+        color: #666;
+      }
+      .btn-download {
+        background: #2c5364;
+        color: white;
+        padding: 6px 14px;
+        border-radius: 6px;
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .btn-download:hover {
+        background: #203a43;
+      }
+
+      @media (max-width: 900px) {
+        .charts-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <div class="header">
+        <h1>Tobii Pro Glasses 3 - MVP</h1>
+        <p>Real-time gaze and IMU data acquisition and visualization</p>
+      </div>
+
+      <!-- Connection Panel -->
+      <div class="panel">
+        <h2>Connection</h2>
+        <div class="error-message" id="errorMessage"></div>
+        <div class="success-message" id="successMessage"></div>
+
+        <div class="status-grid">
+          <div class="status-item off" id="statusConnection">
+            <div class="label">Connection</div>
+            <div class="value">
+              <span class="indicator off" id="connIndicator"></span
+              ><span id="connText">Disconnected</span>
+            </div>
+          </div>
+          <div class="status-item">
+            <div class="label">Serial</div>
+            <div class="value" id="statusSerial">--</div>
+          </div>
+          <div class="status-item">
+            <div class="label">Firmware</div>
+            <div class="value" id="statusFirmware">--</div>
+          </div>
+          <div class="status-item">
+            <div class="label">Battery</div>
+            <div class="value" id="statusBattery">--%</div>
+          </div>
+          <div class="status-item">
+            <div class="label">Gaze Frequency</div>
+            <div class="value" id="statusGazeFreq">-- Hz</div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="input-group">
+            <label for="hostname">Hostname</label>
+            <input
+              type="text"
+              id="hostname"
+              value="tg03b-080203110741.local"
+              placeholder="tg03b-XXXXXXXXXXXX"
+            />
+          </div>
+          <button class="btn-connect" id="btnConnect" onclick="connectDevice()">
+            Connect
+          </button>
+          <button
+            class="btn-disconnect"
+            id="btnDisconnect"
+            onclick="disconnectDevice()"
+            disabled
+          >
+            Disconnect
+          </button>
+        </div>
+      </div>
+
+      <!-- Calibration Panel -->
+      <div class="panel">
+        <h2>Calibration</h2>
+        <div class="controls" style="align-items: center">
+          <button
+            class="btn-calibrate"
+            id="btnCalibrate"
+            onclick="runCalibration()"
+            disabled
+          >
+            Run Calibration
+          </button>
+          <div class="calibration-status">
+            <span class="indicator off" id="calIndicator"></span>
+            <span id="calText">Not calibrated</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Streaming Controls -->
+      <div class="panel">
+        <h2>Streaming</h2>
+        <div class="status-grid" style="margin-bottom: 12px">
+          <div class="status-item">
+            <div class="label">Gaze Samples</div>
+            <div class="value" id="gazeSamples">0</div>
+          </div>
+          <div class="status-item">
+            <div class="label">IMU Samples</div>
+            <div class="value" id="imuSamples">0</div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="input-group">
+            <label for="gazeDecimation">Gaze Decimation</label>
+            <select id="gazeDecimation" onchange="updateDecimation()">
+              <option value="1">Every sample (50Hz)</option>
+              <option value="2" selected>Every 2nd (25Hz)</option>
+              <option value="5">Every 5th (10Hz)</option>
+              <option value="10">Every 10th (5Hz)</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="imuDecimation">IMU Decimation</label>
+            <select id="imuDecimation" onchange="updateDecimation()">
+              <option value="1">Every sample (~100Hz)</option>
+              <option value="2">Every 2nd (~50Hz)</option>
+              <option value="5" selected>Every 5th (~20Hz)</option>
+              <option value="10">Every 10th (~10Hz)</option>
+            </select>
+          </div>
+          <button
+            class="btn-start"
+            id="btnStart"
+            onclick="startStreaming()"
+            disabled
+          >
+            Start Streaming
+          </button>
+          <button
+            class="btn-stop"
+            id="btnStop"
+            onclick="stopStreaming()"
+            disabled
+          >
+            Stop Streaming
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Gaze Position -->
+      <div class="chart-card" style="margin-bottom: 20px">
+        <h3>Live Gaze Position</h3>
+        <canvas id="gazeCanvas" style="width:100%; aspect-ratio:16/9; background:#1a1a2e; border-radius:8px; cursor:none;"></canvas>
+      </div>
+
+      <!-- Charts 2x2 Grid -->
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3>Gaze 2D Position</h3>
+          <canvas id="gazeChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Pupil Diameter</h3>
+          <canvas id="pupilChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Accelerometer</h3>
+          <canvas id="accelChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Gyroscope</h3>
+          <canvas id="gyroChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Recordings Panel -->
+      <div class="panel" style="margin-top: 20px">
+        <h2>Recordings</h2>
+        <div id="recordingsList">
+          <p style="color: #999; font-style: italic">No recordings available</p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // SocketIO
+      const socket = io();
+      const MAX_POINTS = 100;
+      const MAX_LINE_POINTS = 200;
+
+      // ---------------------------------------------------------------
+      // Charts
+      // ---------------------------------------------------------------
+
+      // Gaze 2D - scatter
+      const gazeChart = new Chart(
+        document.getElementById("gazeChart").getContext("2d"),
+        {
+          type: "scatter",
+          data: {
+            datasets: [
+              {
+                label: "Gaze Position",
+                data: [],
+                backgroundColor: "rgba(44,83,100,0.6)",
+                pointRadius: 3,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            animation: false,
+            scales: {
+              x: {
+                title: { display: true, text: "X (normalized)" },
+                min: 0,
+                max: 1,
+              },
+              y: {
+                title: { display: true, text: "Y (normalized)" },
+                min: 0,
+                max: 1,
+                reverse: true,
+              },
+            },
+            plugins: { legend: { display: false } },
+          },
+        },
+      );
+
+      // Pupil diameter - dual line
+      const pupilChart = new Chart(
+        document.getElementById("pupilChart").getContext("2d"),
+        {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: [
+              {
+                label: "Left",
+                data: [],
+                borderColor: "#3b82f6",
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.3,
+              },
+              {
+                label: "Right",
+                data: [],
+                borderColor: "#ef4444",
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.3,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            animation: false,
+            scales: {
+              x: {
+                display: true,
+                title: { display: true, text: "Time" },
+                ticks: { maxTicksLimit: 5, display: false },
+              },
+              y: {
+                title: { display: true, text: "Diameter (mm)" },
+                beginAtZero: false,
+              },
+            },
+            plugins: { legend: { position: "top" } },
+          },
+        },
+      );
+
+      // Accelerometer - triple line
+      const accelChart = new Chart(
+        document.getElementById("accelChart").getContext("2d"),
+        {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: [
+              {
+                label: "X",
+                data: [],
+                borderColor: "#ef4444",
+                borderWidth: 1.5,
+                pointRadius: 0,
+                tension: 0.3,
+              },
+              {
+                label: "Y",
+                data: [],
+                borderColor: "#10b981",
+                borderWidth: 1.5,
+                pointRadius: 0,
+                tension: 0.3,
+              },
+              {
+                label: "Z",
+                data: [],
+                borderColor: "#3b82f6",
+                borderWidth: 1.5,
+                pointRadius: 0,
+                tension: 0.3,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            animation: false,
+            scales: {
+              x: {
+                display: true,
+                title: { display: true, text: "Time" },
+                ticks: { maxTicksLimit: 5, display: false },
+              },
+              y: { title: { display: true, text: "m/s\u00B2" } },
+            },
+            plugins: { legend: { position: "top" } },
+          },
+        },
+      );
+
+      // Gyroscope - triple line
+      const gyroChart = new Chart(
+        document.getElementById("gyroChart").getContext("2d"),
+        {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: [
+              {
+                label: "X",
+                data: [],
+                borderColor: "#ef4444",
+                borderWidth: 1.5,
+                pointRadius: 0,
+                tension: 0.3,
+              },
+              {
+                label: "Y",
+                data: [],
+                borderColor: "#10b981",
+                borderWidth: 1.5,
+                pointRadius: 0,
+                tension: 0.3,
+              },
+              {
+                label: "Z",
+                data: [],
+                borderColor: "#3b82f6",
+                borderWidth: 1.5,
+                pointRadius: 0,
+                tension: 0.3,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            animation: false,
+            scales: {
+              x: {
+                display: true,
+                title: { display: true, text: "Time" },
+                ticks: { maxTicksLimit: 5, display: false },
+              },
+              y: { title: { display: true, text: "deg/s" } },
+            },
+            plugins: { legend: { position: "top" } },
+          },
+        },
+      );
+
+      // ---------------------------------------------------------------
+      // Socket events
+      // ---------------------------------------------------------------
+
+      socket.on("connect", () => {
+        console.log("Connected to server");
+      });
+      socket.on("disconnect", () => {
+        showError("Disconnected from server");
+      });
+
+      socket.on("status_update", (s) => updateStatus(s));
+      socket.on("error", (e) => showError(e.message));
+
+      socket.on("calibration_result", (r) => {
+        if (r.success) {
+          document.getElementById("calIndicator").className = "indicator on";
+          document.getElementById("calText").textContent = "Calibrated";
+          showSuccess("Calibration successful");
+        } else {
+          document.getElementById("calIndicator").className = "indicator off";
+          document.getElementById("calText").textContent = "Calibration failed";
+          showError("Calibration failed");
+        }
+        document.getElementById("btnCalibrate").disabled = false;
+      });
+
+      socket.on("new_data", (d) => {
+        if (d.type === "gaze") handleGaze(d);
+        else if (d.type === "imu") handleIMU(d);
+      });
+
+      socket.on("new_recording", (r) => {
+        showSuccess(
+          `Recording saved: ${r.files.join(", ")} (${r.gaze_samples} gaze, ${r.imu_samples} IMU samples)`,
+        );
+        loadRecordings();
+      });
+
+      // ---------------------------------------------------------------
+      // Data handlers
+      // ---------------------------------------------------------------
+
+      // ---------------------------------------------------------------
+      // Live Gaze Canvas
+      // ---------------------------------------------------------------
+
+      const gazeCanvas = document.getElementById("gazeCanvas");
+      const gazeCtx = gazeCanvas.getContext("2d");
+      const gazeTrail = []; // recent positions for fading trail
+      const TRAIL_LENGTH = 30;
+
+      function resizeGazeCanvas() {
+        gazeCanvas.width = gazeCanvas.clientWidth;
+        gazeCanvas.height = gazeCanvas.clientHeight;
+      }
+      resizeGazeCanvas();
+      window.addEventListener("resize", resizeGazeCanvas);
+
+      function drawGazeCanvas(x, y) {
+        const w = gazeCanvas.width;
+        const h = gazeCanvas.height;
+        const px = x * w;
+        const py = y * h;
+
+        // Store trail point
+        gazeTrail.push({ x: px, y: py });
+        if (gazeTrail.length > TRAIL_LENGTH) gazeTrail.shift();
+
+        // Clear
+        gazeCtx.clearRect(0, 0, w, h);
+
+        // Grid lines
+        gazeCtx.strokeStyle = "rgba(255,255,255,0.06)";
+        gazeCtx.lineWidth = 1;
+        for (let i = 1; i < 10; i++) {
+          gazeCtx.beginPath();
+          gazeCtx.moveTo((w / 10) * i, 0);
+          gazeCtx.lineTo((w / 10) * i, h);
+          gazeCtx.stroke();
+          gazeCtx.beginPath();
+          gazeCtx.moveTo(0, (h / 10) * i);
+          gazeCtx.lineTo(w, (h / 10) * i);
+          gazeCtx.stroke();
+        }
+
+        // Trail (fading circles)
+        for (let i = 0; i < gazeTrail.length - 1; i++) {
+          const alpha = ((i + 1) / gazeTrail.length) * 0.4;
+          const radius = 2 + (i / gazeTrail.length) * 4;
+          gazeCtx.beginPath();
+          gazeCtx.arc(gazeTrail[i].x, gazeTrail[i].y, radius, 0, Math.PI * 2);
+          gazeCtx.fillStyle = `rgba(99, 202, 255, ${alpha})`;
+          gazeCtx.fill();
+        }
+
+        // Crosshair
+        gazeCtx.strokeStyle = "rgba(99, 202, 255, 0.4)";
+        gazeCtx.lineWidth = 1;
+        gazeCtx.setLineDash([4, 4]);
+        gazeCtx.beginPath();
+        gazeCtx.moveTo(px, 0); gazeCtx.lineTo(px, h);
+        gazeCtx.moveTo(0, py); gazeCtx.lineTo(w, py);
+        gazeCtx.stroke();
+        gazeCtx.setLineDash([]);
+
+        // Current gaze point
+        gazeCtx.beginPath();
+        gazeCtx.arc(px, py, 10, 0, Math.PI * 2);
+        gazeCtx.fillStyle = "rgba(99, 202, 255, 0.25)";
+        gazeCtx.fill();
+        gazeCtx.beginPath();
+        gazeCtx.arc(px, py, 5, 0, Math.PI * 2);
+        gazeCtx.fillStyle = "#63caff";
+        gazeCtx.fill();
+
+        // Coordinate label
+        gazeCtx.fillStyle = "rgba(255,255,255,0.7)";
+        gazeCtx.font = "12px monospace";
+        gazeCtx.fillText(`(${x.toFixed(3)}, ${y.toFixed(3)})`, px + 14, py - 10);
+      }
+
+      function handleGaze(d) {
+        // Live gaze canvas
+        if (d.gaze2d_x != null && d.gaze2d_y != null) {
+          drawGazeCanvas(d.gaze2d_x, d.gaze2d_y);
+        }
+
+        // Scatter chart
+        if (d.gaze2d_x != null && d.gaze2d_y != null) {
+          const ds = gazeChart.data.datasets[0].data;
+          ds.push({ x: d.gaze2d_x, y: d.gaze2d_y });
+          if (ds.length > MAX_POINTS) ds.shift();
+          gazeChart.update("none");
+        }
+
+        // Pupil
+        const labels = pupilChart.data.labels;
+        const ts = new Date(d.ts * 1000).toLocaleTimeString();
+        labels.push(ts);
+        pupilChart.data.datasets[0].data.push(d.left_pupil);
+        pupilChart.data.datasets[1].data.push(d.right_pupil);
+        if (labels.length > MAX_LINE_POINTS) {
+          labels.shift();
+          pupilChart.data.datasets[0].data.shift();
+          pupilChart.data.datasets[1].data.shift();
+        }
+        pupilChart.update("none");
+      }
+
+      function handleIMU(d) {
+        const labels = accelChart.data.labels;
+        const ts = new Date(d.ts * 1000).toLocaleTimeString();
+
+        // Accel
+        labels.push(ts);
+        accelChart.data.datasets[0].data.push(d.accel_x);
+        accelChart.data.datasets[1].data.push(d.accel_y);
+        accelChart.data.datasets[2].data.push(d.accel_z);
+        if (labels.length > MAX_LINE_POINTS) {
+          labels.shift();
+          accelChart.data.datasets.forEach((ds) => ds.data.shift());
+        }
+        accelChart.update("none");
+
+        // Gyro
+        const gLabels = gyroChart.data.labels;
+        gLabels.push(ts);
+        gyroChart.data.datasets[0].data.push(d.gyro_x);
+        gyroChart.data.datasets[1].data.push(d.gyro_y);
+        gyroChart.data.datasets[2].data.push(d.gyro_z);
+        if (gLabels.length > MAX_LINE_POINTS) {
+          gLabels.shift();
+          gyroChart.data.datasets.forEach((ds) => ds.data.shift());
+        }
+        gyroChart.update("none");
+      }
+
+      // ---------------------------------------------------------------
+      // Status
+      // ---------------------------------------------------------------
+
+      function updateStatus(s) {
+        const connected = s.connected;
+
+        // Connection indicator
+        document.getElementById("connIndicator").className = connected
+          ? "indicator on"
+          : "indicator off";
+        document.getElementById("connText").textContent = connected
+          ? "Connected"
+          : "Disconnected";
+        document.getElementById("statusConnection").className = connected
+          ? "status-item ok"
+          : "status-item off";
+
+        document.getElementById("statusSerial").textContent = s.serial || "--";
+        document.getElementById("statusFirmware").textContent =
+          s.firmware || "--";
+        document.getElementById("statusBattery").textContent = s.battery
+          ? s.battery + "%"
+          : "--%";
+        document.getElementById("statusGazeFreq").textContent = s.gaze_freq
+          ? s.gaze_freq + " Hz"
+          : "-- Hz";
+
+        document.getElementById("gazeSamples").textContent = (
+          s.gaze_samples || 0
+        ).toLocaleString();
+        document.getElementById("imuSamples").textContent = (
+          s.imu_samples || 0
+        ).toLocaleString();
+
+        // Calibration
+        if (s.calibrated) {
+          document.getElementById("calIndicator").className = "indicator on";
+          document.getElementById("calText").textContent = "Calibrated";
+        }
+
+        // Buttons
+        document.getElementById("btnConnect").disabled = connected;
+        document.getElementById("btnDisconnect").disabled = !connected;
+        document.getElementById("btnCalibrate").disabled =
+          !connected || s.streaming;
+        document.getElementById("btnStart").disabled =
+          !connected || s.streaming;
+        document.getElementById("btnStop").disabled = !s.streaming;
+
+        if (s.error) showError(s.error);
+      }
+
+      // ---------------------------------------------------------------
+      // Actions
+      // ---------------------------------------------------------------
+
+      function connectDevice() {
+        const hostname = document.getElementById("hostname").value.trim();
+        if (!hostname) {
+          showError("Please enter a hostname");
+          return;
+        }
+        document.getElementById("btnConnect").disabled = true;
+        showSuccess("Connecting...");
+        socket.emit("connect_device", { hostname });
+      }
+
+      function disconnectDevice() {
+        socket.emit("disconnect_device");
+      }
+
+      function startStreaming() {
+        clearCharts();
+        const gazeDec = parseInt(
+          document.getElementById("gazeDecimation").value,
+        );
+        const imuDec = parseInt(document.getElementById("imuDecimation").value);
+        socket.emit("start_streaming", {
+          gaze_decimation: gazeDec,
+          imu_decimation: imuDec,
+        });
+      }
+
+      function stopStreaming() {
+        socket.emit("stop_streaming");
+      }
+
+      function runCalibration() {
+        document.getElementById("btnCalibrate").disabled = true;
+        document.getElementById("calIndicator").className = "indicator warn";
+        document.getElementById("calText").textContent = "Calibrating...";
+        socket.emit("run_calibration");
+      }
+
+      function updateDecimation() {
+        const gazeDec = parseInt(
+          document.getElementById("gazeDecimation").value,
+        );
+        const imuDec = parseInt(document.getElementById("imuDecimation").value);
+        socket.emit("update_decimation", {
+          gaze_decimation: gazeDec,
+          imu_decimation: imuDec,
+        });
+      }
+
+      function clearCharts() {
+        gazeTrail.length = 0;
+        gazeCtx.clearRect(0, 0, gazeCanvas.width, gazeCanvas.height);
+
+        gazeChart.data.datasets[0].data = [];
+        gazeChart.update();
+
+        pupilChart.data.labels = [];
+        pupilChart.data.datasets.forEach((ds) => (ds.data = []));
+        pupilChart.update();
+
+        accelChart.data.labels = [];
+        accelChart.data.datasets.forEach((ds) => (ds.data = []));
+        accelChart.update();
+
+        gyroChart.data.labels = [];
+        gyroChart.data.datasets.forEach((ds) => (ds.data = []));
+        gyroChart.update();
+      }
+
+      // ---------------------------------------------------------------
+      // Messages
+      // ---------------------------------------------------------------
+
+      function showError(msg) {
+        const el = document.getElementById("errorMessage");
+        el.textContent = msg;
+        el.style.display = "block";
+        setTimeout(() => {
+          el.style.display = "none";
+        }, 5000);
+      }
+
+      function showSuccess(msg) {
+        const el = document.getElementById("successMessage");
+        el.textContent = msg;
+        el.style.display = "block";
+        setTimeout(() => {
+          el.style.display = "none";
+        }, 3000);
+      }
+
+      // ---------------------------------------------------------------
+      // Recordings
+      // ---------------------------------------------------------------
+
+      function loadRecordings() {
+        fetch("/api/recordings")
+          .then((r) => r.json())
+          .then((recordings) => {
+            const list = document.getElementById("recordingsList");
+            if (!recordings.length) {
+              list.innerHTML =
+                '<p style="color:#999;font-style:italic">No recordings available</p>';
+              return;
+            }
+            let html = "";
+            recordings.forEach((rec) => {
+              const sizeKB = (rec.size / 1024).toFixed(1);
+              const date =
+                rec.metadata.start_time ||
+                new Date(rec.created * 1000).toLocaleString();
+              const samples = rec.metadata.samples || "N/A";
+              const type = rec.type.toUpperCase();
+              html += `
+                    <div class="recording-item">
+                        <div class="recording-info">
+                            <h3>[${type}] ${rec.filename}</h3>
+                            <p>${date} | ${samples} samples | ${sizeKB} KB</p>
+                        </div>
+                        <a href="/api/recordings/${rec.filename}" class="btn-download" download>Download</a>
+                    </div>`;
+            });
+            list.innerHTML = html;
+          })
+          .catch((err) => console.error("Error loading recordings:", err));
+      }
+
+      // Initial load
+      fetch("/api/status")
+        .then((r) => r.json())
+        .then((s) => updateStatus(s))
+        .catch(() => {});
+      loadRecordings();
+
+      // Periodic status refresh while streaming
+      setInterval(() => {
+        fetch("/api/status")
+          .then((r) => r.json())
+          .then((s) => {
+            document.getElementById("gazeSamples").textContent = (
+              s.gaze_samples || 0
+            ).toLocaleString();
+            document.getElementById("imuSamples").textContent = (
+              s.imu_samples || 0
+            ).toLocaleString();
+          })
+          .catch(() => {});
+      }, 2000);
+    </script>
+  </body>
+</html>
