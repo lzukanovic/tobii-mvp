@@ -101,6 +101,7 @@ def _write_csv(filename, columns, keys, data, metadata, title):
         writer.writerow(['# Serial', metadata.get('serial', 'N/A')])
         writer.writerow(['# Firmware', metadata.get('firmware', 'N/A')])
         writer.writerow(['# Battery (%)', metadata.get('battery', 'N/A')])
+        writer.writerow(['# Charging', metadata.get('charging', 'N/A')])
         writer.writerow(['# Gaze Frequency (Hz)', metadata.get('gaze_freq', 'N/A')])
         writer.writerow(['# Total Samples', len(data)])
         writer.writerow([])

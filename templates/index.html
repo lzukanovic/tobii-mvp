@@ -326,6 +326,10 @@
             <div class="value" id="statusBattery">--%</div>
           </div>
           <div class="status-item">
+            <div class="label">Charging</div>
+            <div class="value" id="statusCharging">--</div>
+          </div>
+          <div class="status-item">
             <div class="label">Gaze Frequency</div>
             <div class="value" id="statusGazeFreq">-- Hz</div>
           </div>
@@ -429,7 +433,16 @@
       <!-- Live Gaze Position -->
       <div class="chart-card" style="margin-bottom: 20px">
         <h3>Live Gaze Position</h3>
-        <canvas id="gazeCanvas" style="width:100%; aspect-ratio:16/9; background:#1a1a2e; border-radius:8px; cursor:none;"></canvas>
+        <canvas
+          id="gazeCanvas"
+          style="
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #1a1a2e;
+            border-radius: 8px;
+            cursor: none;
+          "
+        ></canvas>
       </div>
 
       <!-- Charts 2x2 Grid -->
@@ -753,8 +766,10 @@
         gazeCtx.lineWidth = 1;
         gazeCtx.setLineDash([4, 4]);
         gazeCtx.beginPath();
-        gazeCtx.moveTo(px, 0); gazeCtx.lineTo(px, h);
-        gazeCtx.moveTo(0, py); gazeCtx.lineTo(w, py);
+        gazeCtx.moveTo(px, 0);
+        gazeCtx.lineTo(px, h);
+        gazeCtx.moveTo(0, py);
+        gazeCtx.lineTo(w, py);
         gazeCtx.stroke();
         gazeCtx.setLineDash([]);
 
@@ -771,7 +786,11 @@
         // Coordinate label
         gazeCtx.fillStyle = "rgba(255,255,255,0.7)";
         gazeCtx.font = "12px monospace";
-        gazeCtx.fillText(`(${x.toFixed(3)}, ${y.toFixed(3)})`, px + 14, py - 10);
+        gazeCtx.fillText(
+          `(${x.toFixed(3)}, ${y.toFixed(3)})`,
+          px + 14,
+          py - 10,
+        );
       }
 
       function handleGaze(d) {
@@ -851,9 +870,11 @@
         document.getElementById("statusSerial").textContent = s.serial || "--";
         document.getElementById("statusFirmware").textContent =
           s.firmware || "--";
-        document.getElementById("statusBattery").textContent = s.battery
-          ? s.battery + "%"
-          : "--%";
+        console.log(s);
+        document.getElementById("statusBattery").textContent =
+          s.battery == null ? "--%" : s.battery + "%";
+        document.getElementById("statusCharging").textContent =
+          s.charging == null ? "--" : s.charging ? "Yes" : "No";
         document.getElementById("statusGazeFreq").textContent = s.gaze_freq
           ? s.gaze_freq + " Hz"
           : "-- Hz";

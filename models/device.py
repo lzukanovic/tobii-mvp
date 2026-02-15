@@ -11,6 +11,7 @@ class DeviceStatus:
     serial: str = ""
     firmware: str = ""
     battery: float = 0.0
+    charging: bool = False
     streaming: bool = False
     calibrated: bool = False
     gaze_freq: int = 0
@@ -26,6 +27,7 @@ class DeviceStatus:
         self.serial = ""
         self.firmware = ""
         self.battery = 0.0
+        self.charging = False
         self.streaming = False
         self.calibrated = False
         self.gaze_freq = 0

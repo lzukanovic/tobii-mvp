@@ -82,6 +82,8 @@ class AcquisitionService:
         battery_level = await self._g3.system.battery.get_level()
         self.status.battery = round(battery_level * 100, 1)
 
+        self.status.charging = await self._g3.system.battery.get_charging()
+
         freqs = await self._g3.system.available_gaze_frequencies()
         if freqs:
             # try to set desired frequency if available, otherwise use max available
@@ -101,8 +103,8 @@ class AcquisitionService:
         self.status.error = None
 
         logger.info(
-            "Connected to %s (serial=%s, fw=%s, battery=%.1f%%)",
-            hostname, self.status.serial, self.status.firmware, self.status.battery
+            "Connected to %s (serial=%s, fw=%s, battery=%.1f%%, charging=%s)",
+            hostname, self.status.serial, self.status.firmware, self.status.battery, self.status.charging
         )
 
     def disconnect(self):
@@ -154,6 +156,7 @@ class AcquisitionService:
             'serial': self.status.serial,
             'firmware': self.status.firmware,
             'battery': self.status.battery,
+            'charging': self.status.charging,
             'gaze_freq': self.status.gaze_freq,
         }
 
