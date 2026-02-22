@@ -66,7 +66,7 @@ class AcquisitionService:
         try:
             run_coroutine_sync(self._async_connect(hostname))
         except Exception as e:
-            self.status.error = str(e)
+            self.status.error = str(e) or repr(e)
             self.socketio.emit('status_update', self.status.to_dict())
             raise
 

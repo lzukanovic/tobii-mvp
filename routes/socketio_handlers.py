@@ -34,8 +34,9 @@ def init_socketio_handlers(socketio, acq_service):
             emit('status_update', acquisition_service.get_status())
 
         except Exception as e:
-            print(f"Error connecting: {e}")
-            emit('error', {'message': f'Connection failed: {str(e)}'})
+            error_msg = str(e) or repr(e)
+            print(f"Error connecting: {error_msg}")
+            emit('error', {'message': f'Connection failed: {error_msg}'})
 
     @socketio.on('disconnect_device')
     def handle_disconnect_device():
