@@ -7,6 +7,11 @@
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.1.1/dist/chartjs-chart-matrix.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.js"></script>
     <style>
       * {
         margin: 0;
@@ -197,25 +202,6 @@
         max-height: 280px;
       }
 
-      .error-message {
-        background: #fee2e2;
-        border: 1px solid #ef4444;
-        color: #991b1b;
-        padding: 12px 15px;
-        border-radius: 6px;
-        margin-bottom: 12px;
-        display: none;
-      }
-      .success-message {
-        background: #d1fae5;
-        border: 1px solid #10b981;
-        color: #065f46;
-        padding: 12px 15px;
-        border-radius: 6px;
-        margin-bottom: 12px;
-        display: none;
-      }
-
       .indicator {
         display: inline-block;
         width: 10px;
@@ -303,9 +289,6 @@
       <!-- Connection Panel -->
       <div class="panel">
         <h2>Connection</h2>
-        <div class="error-message" id="errorMessage"></div>
-        <div class="success-message" id="successMessage"></div>
-
         <div class="status-grid">
           <div class="status-item off" id="statusConnection">
             <div class="label">Connection</div>
@@ -787,8 +770,9 @@
       // ---------------------------------------------------------------
 
       socket.on("connect", () => {
-        console.log("Connected to server");
+        showSuccess("Connected to server");
       });
+
       socket.on("disconnect", () => {
         showError("Disconnected from server");
       });
@@ -1106,26 +1090,27 @@
       }
 
       // ---------------------------------------------------------------
-      // Messages
+      // Toastify helpers
       // ---------------------------------------------------------------
 
-      function showError(msg) {
-        const el = document.getElementById("errorMessage");
-        el.textContent = msg;
-        el.style.display = "block";
-        setTimeout(() => {
-          el.style.display = "none";
-        }, 5000);
+      function toast(
+        message,
+        { background, duration = 3500, close = false } = {},
+      ) {
+        Toastify({
+          text: message,
+          duration,
+          close,
+          gravity: "top",
+          position: "right",
+          stopOnFocus: true,
+          style: { background },
+        }).showToast();
       }
 
-      function showSuccess(msg) {
-        const el = document.getElementById("successMessage");
-        el.textContent = msg;
-        el.style.display = "block";
-        setTimeout(() => {
-          el.style.display = "none";
-        }, 3000);
-      }
+      const showSuccess = (msg) => toast(msg, { background: "#10b981" });
+      const showError = (msg) =>
+        toast(msg, { background: "#ef4444", duration: 6000 });
 
       // ---------------------------------------------------------------
       // Recordings
