@@ -23,6 +23,7 @@ class AcquisitionService:
         self.data_queue = data_queue
         self.socketio = socketio
         self.status = DeviceStatus()
+        self.webrtc_service = None  # set by app after both services are created
 
         # g3pylib objects (managed on the async loop)
         self._g3 = None
@@ -102,6 +103,9 @@ class AcquisitionService:
         self.status.connected = True
         self.status.error = None
 
+        if self.webrtc_service is not None:
+            self.webrtc_service.set_glasses(self._g3)
+
         logger.info(
             "Connected to %s (serial=%s, fw=%s, battery=%.1f%%, charging=%s)",
             hostname, self.status.serial, self.status.firmware, self.status.battery, self.status.charging
@@ -123,6 +127,8 @@ class AcquisitionService:
             self.status.reset()
 
     async def _async_disconnect(self):
+        if self.webrtc_service is not None:
+            self.webrtc_service.clear_glasses()
         if self._g3_context is not None:
             await self._g3_context.__aexit__(None, None, None)
             self._g3 = None

@@ -58,10 +58,27 @@ def run_coroutine(coro):
 
     Use this for long-running tasks like stream receiver loops.
 
-    Args:
-        coro: Coroutine to run
-
     Returns:
-        concurrent.futures.Future that can be used to check status
+        asyncio.Task — cancel it with cancel_task() to properly stop the loop.
     """
-    return asyncio.run_coroutine_threadsafe(coro, get_loop())
+    import concurrent.futures as cf
+    loop = get_loop()
+    task_future = cf.Future()
+
+    def _create():
+        task = loop.create_task(coro)
+        task_future.set_result(task)
+
+    loop.call_soon_threadsafe(_create)
+    return task_future.result(timeout=5)
+
+
+def cancel_task(task):
+    """
+    Cancel an asyncio Task from a synchronous (non-loop) thread.
+
+    asyncio.Task.cancel() is not thread-safe; this schedules the
+    cancellation on the event loop's thread instead.
+    """
+    if task is not None:
+        get_loop().call_soon_threadsafe(task.cancel)

@@ -17,6 +17,8 @@ from config.settings import (
 )
 from services.async_bridge import start_async_loop
 from services.acquisition_service import AcquisitionService
+from services.webrtc_service import WebRTCService
+from services.g3proxy_service import G3ProxyService
 from routes.api_routes import api_bp, init_routes
 from routes.socketio_handlers import init_socketio_handlers
 
@@ -45,10 +47,13 @@ def create_app():
 
     # Initialize services
     acquisition_service = AcquisitionService(data_queue, socketio)
+    webrtc_service = WebRTCService(socketio)
+    g3proxy_service = G3ProxyService(socketio)
+    acquisition_service.webrtc_service = webrtc_service
 
     # Initialize routes
     init_routes(acquisition_service)
-    init_socketio_handlers(socketio, acquisition_service)
+    init_socketio_handlers(socketio, acquisition_service, webrtc_service, g3proxy_service)
     app.register_blueprint(api_bp)
 
     @app.route('/')

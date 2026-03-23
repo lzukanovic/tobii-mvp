@@ -8,3 +8,5 @@ recordings
 *.egg-info/
 dist/
 build/
+.DS_Store
+CLAUDE.md

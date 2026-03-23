@@ -1,16 +1,21 @@
 """
 WebSocket event handlers for real-time communication with the browser.
 """
+from flask import request
 from flask_socketio import emit
 from services.recording_service import save_recordings
 from config.settings import G3_HOSTNAME, DEFAULT_GAZE_DECIMATION, DEFAULT_IMU_DECIMATION
 
 acquisition_service = None
+webrtc_service = None
+g3proxy_service = None
 
 
-def init_socketio_handlers(socketio, acq_service):
-    global acquisition_service
+def init_socketio_handlers(socketio, acq_service, webrtc_svc, g3proxy_svc=None):
+    global acquisition_service, webrtc_service, g3proxy_service
     acquisition_service = acq_service
+    webrtc_service = webrtc_svc
+    g3proxy_service = g3proxy_svc
 
     @socketio.on('connect')
     def handle_connect():
@@ -68,7 +73,6 @@ def init_socketio_handlers(socketio, acq_service):
         try:
             acquisition_service.stop_streaming()
 
-            # Save recordings
             files = save_recordings(
                 acquisition_service.gaze_data,
                 acquisition_service.imu_data,
@@ -101,3 +105,31 @@ def init_socketio_handlers(socketio, acq_service):
             print(f"Calibration error: {e}")
             emit('calibration_result', {'success': False})
             emit('error', {'message': f'Calibration failed: {str(e)}'})
+
+    # ------------------------------------------------------------------
+    # g3api WebSocket proxy (bypasses CORS that blocks direct browser WS)
+    # Browser drives all WebRTC signaling directly via the proxy.
+    # ------------------------------------------------------------------
+
+    @socketio.on('g3_proxy_connect')
+    def handle_g3_proxy_connect(data):
+        try:
+            hostname = data.get('hostname', G3_HOSTNAME)
+            g3proxy_service.connect(hostname, request.sid)
+        except Exception as e:
+            print(f"G3 proxy connect error: {e}")
+            emit('g3_proxy_error', {'error': str(e)})
+
+    @socketio.on('g3_proxy_send')
+    def handle_g3_proxy_send(data):
+        try:
+            g3proxy_service.send(data.get('data', ''))
+        except Exception as e:
+            print(f"G3 proxy send error: {e}")
+
+    @socketio.on('g3_proxy_stop')
+    def handle_g3_proxy_stop():
+        try:
+            g3proxy_service.stop()
+        except Exception as e:
+            print(f"G3 proxy stop error: {e}")

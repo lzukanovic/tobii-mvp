@@ -276,6 +276,30 @@
           grid-template-columns: 1fr;
         }
       }
+
+      .webrtc-video-wrapper {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 16/9;
+        background: #1a1a2e;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .webrtc-video-wrapper video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+      .webrtc-placeholder {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #666;
+        font-size: 14px;
+      }
     </style>
   </head>
   <body>
@@ -414,6 +438,35 @@
         </div>
       </div>
 
+      <!-- Live View (WebRTC) -->
+      <div class="panel" id="webrtcPanel">
+        <h2>Live View</h2>
+        <div class="controls" style="margin-bottom: 15px">
+          <button
+            class="btn-start"
+            id="btnWebrtcStart"
+            onclick="startWebRTC()"
+            disabled
+          >
+            Start Live View
+          </button>
+          <button
+            class="btn-stop"
+            id="btnWebrtcStop"
+            onclick="stopWebRTC()"
+            disabled
+          >
+            Stop Live View
+          </button>
+        </div>
+        <div class="webrtc-video-wrapper">
+          <video id="webrtcVideo" autoplay playsinline muted></video>
+          <div class="webrtc-placeholder" id="webrtcPlaceholder">
+            Connect to glasses and press Start Live View
+          </div>
+        </div>
+      </div>
+
       <!-- Live Gaze Position -->
       <div class="chart-card" style="margin-bottom: 20px">
         <h3>Live Gaze Position</h3>
@@ -467,6 +520,8 @@
       const socket = io();
       const MAX_POINTS = 100;
       const MAX_LINE_POINTS = 200;
+
+      // WebRTC Live View — see static/js/webrtc.js
 
       // ---------------------------------------------------------------
       // Charts
@@ -1006,6 +1061,10 @@
         document.getElementById("btnStart").disabled =
           !connected || s.streaming;
         document.getElementById("btnStop").disabled = !s.streaming;
+        // WebRTC start enabled when connected and not already in a session
+        if (!webrtcPeer) {
+          document.getElementById("btnWebrtcStart").disabled = !connected;
+        }
 
         if (s.error) showError(s.error);
       }
@@ -1026,6 +1085,7 @@
       }
 
       function disconnectDevice() {
+        if (webrtcPeer) stopWebRTC();
         socket.emit("disconnect_device");
       }
 
@@ -1170,5 +1230,6 @@
           .catch(() => {});
       }, 2000);
     </script>
+    <script src="{{ url_for('static', filename='js/webrtc.js') }}"></script>
   </body>
 </html>
