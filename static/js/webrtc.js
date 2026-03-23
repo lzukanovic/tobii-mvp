@@ -191,6 +191,7 @@ async function handleOffer(offerSdp) {
     socket.emit("webrtc_answer", { sdp: answer.sdp });
 
     document.getElementById("btnWebrtcStop").disabled = false;
+    document.getElementById("btnWebrtcMute").disabled = false;
   } catch (err) {
     console.error("[WebRTC] handleOffer failed:", err);
     showError("WebRTC offer handling failed: " + err.message);
@@ -205,6 +206,15 @@ function stopWebRTC() {
   document.getElementById("webrtcPlaceholder").style.display = "flex";
   document.getElementById("btnWebrtcStart").disabled = false;
   document.getElementById("btnWebrtcStop").disabled = true;
+  document.getElementById("btnWebrtcMute").disabled = true;
+  document.getElementById("btnWebrtcMute").textContent = "Unmute";
+}
+
+function toggleMute() {
+  const video = document.getElementById("webrtcVideo");
+  const btn = document.getElementById("btnWebrtcMute");
+  video.muted = !video.muted;
+  btn.textContent = video.muted ? "Unmute" : "Mute";
 }
 
 function teardownWebRTC() {
@@ -214,5 +224,7 @@ function teardownWebRTC() {
   }
   pendingGlassesCandidates = [];
   mlineIndexToMid = {};
-  document.getElementById("webrtcVideo").srcObject = null;
+  const video = document.getElementById("webrtcVideo");
+  video.srcObject = null;
+  video.muted = true;
 }
