@@ -8,3 +8,7 @@ recordings
 *.egg-info/
 dist/
 build/
+.DS_Store
+.idea/
+.vscode/
+CLAUDE.md

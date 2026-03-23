@@ -19,10 +19,11 @@ logger = logging.getLogger(__name__)
 class AcquisitionService:
     """Manages Tobii glasses connection, streaming, and calibration."""
 
-    def __init__(self, data_queue, socketio):
+    def __init__(self, data_queue, socketio, webrtc_service=None):
         self.data_queue = data_queue
         self.socketio = socketio
         self.status = DeviceStatus()
+        self._webrtc_service = webrtc_service
 
         # g3pylib objects (managed on the async loop)
         self._g3 = None
@@ -54,9 +55,7 @@ class AcquisitionService:
         self.sync_data = []
         self.recording_metadata = {}
 
-    # ------------------------------------------------------------------
     # Connection
-    # ------------------------------------------------------------------
 
     def connect(self, hostname):
         """Connect to glasses. Blocks until connected or raises."""
@@ -102,6 +101,9 @@ class AcquisitionService:
         self.status.connected = True
         self.status.error = None
 
+        if self._webrtc_service:
+            self._webrtc_service.set_connection(self._g3)
+
         logger.info(
             "Connected to %s (serial=%s, fw=%s, battery=%.1f%%, charging=%s)",
             hostname, self.status.serial, self.status.firmware, self.status.battery, self.status.charging
@@ -123,14 +125,14 @@ class AcquisitionService:
             self.status.reset()
 
     async def _async_disconnect(self):
+        if self._webrtc_service:
+            self._webrtc_service.clear_connection()
         if self._g3_context is not None:
             await self._g3_context.__aexit__(None, None, None)
             self._g3 = None
             self._g3_context = None
 
-    # ------------------------------------------------------------------
     # Streaming
-    # ------------------------------------------------------------------
 
     def start_streaming(self, gaze_decimation=None, imu_decimation=None):
         """Subscribe to gaze/IMU/event/sync and start receiver tasks."""
@@ -225,9 +227,7 @@ class AcquisitionService:
         self._event_unsub = None
         self._sync_unsub = None
 
-    # ------------------------------------------------------------------
     # Receiver coroutines
-    # ------------------------------------------------------------------
 
     async def _gaze_receiver(self, queue):
         """Receive gaze samples, store all, decimate for browser."""
@@ -452,9 +452,7 @@ class AcquisitionService:
         except Exception as e:
             logger.error("SyncPort receiver error: %s", e)
 
-    # ------------------------------------------------------------------
     # Calibration
-    # ------------------------------------------------------------------
 
     def run_calibration(self):
         """Run calibration procedure. Blocks until done."""
@@ -476,9 +474,7 @@ class AcquisitionService:
                 success = await self._g3.rudimentary.calibrate()
         return bool(success)
 
-    # ------------------------------------------------------------------
     # Helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _parse_sample(sample):
