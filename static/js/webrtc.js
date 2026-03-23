@@ -130,16 +130,15 @@ async function startWebRTC() {
 
     webrtcPeer.ontrack = (ev) => {
       const mid = ev.transceiver && ev.transceiver.mid;
-      console.log(
-        "[WebRTC] Track received - kind:",
-        ev.track.kind,
-        "mid:",
-        mid,
-      );
+      console.log("[WebRTC] Track received - kind:", ev.track.kind, "mid:", mid);
       if (ev.track.kind === "video" && (!mid || mid === "scenevideo")) {
         const video = document.getElementById("webrtcVideo");
-        video.srcObject = ev.streams[0] || new MediaStream([ev.track]);
+        video.srcObject = new MediaStream([ev.track]);
         document.getElementById("webrtcPlaceholder").style.display = "none";
+      } else if (ev.track.kind === "video" && mid === "eyesvideo") {
+        const video = document.getElementById("eyesVideo");
+        video.srcObject = new MediaStream([ev.track]);
+        document.getElementById("eyesPlaceholder").style.display = "none";
       }
     };
 
@@ -227,4 +226,7 @@ function teardownWebRTC() {
   const video = document.getElementById("webrtcVideo");
   video.srcObject = null;
   video.muted = true;
+  const eyesVideo = document.getElementById("eyesVideo");
+  eyesVideo.srcObject = null;
+  document.getElementById("eyesPlaceholder").style.display = "flex";
 }
