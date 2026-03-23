@@ -17,6 +17,7 @@ from config.settings import (
 )
 from services.async_bridge import start_async_loop
 from services.acquisition_service import AcquisitionService
+from services.webrtc_signaling_service import WebRTCSignalingService
 from routes.api_routes import api_bp, init_routes
 from routes.socketio_handlers import init_socketio_handlers
 
@@ -45,10 +46,11 @@ def create_app():
 
     # Initialize services
     acquisition_service = AcquisitionService(data_queue, socketio)
+    webrtc_service = WebRTCSignalingService(socketio)
 
     # Initialize routes
     init_routes(acquisition_service)
-    init_socketio_handlers(socketio, acquisition_service)
+    init_socketio_handlers(socketio, acquisition_service, webrtc_service)
     app.register_blueprint(api_bp)
 
     @app.route('/')

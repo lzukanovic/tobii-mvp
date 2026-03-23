@@ -1,16 +1,19 @@
 """
 WebSocket event handlers for real-time communication with the browser.
 """
+from flask import request
 from flask_socketio import emit
 from services.recording_service import save_recordings
 from config.settings import G3_HOSTNAME, DEFAULT_GAZE_DECIMATION, DEFAULT_IMU_DECIMATION
 
 acquisition_service = None
+webrtc_service = None
 
 
-def init_socketio_handlers(socketio, acq_service):
-    global acquisition_service
+def init_socketio_handlers(socketio, acq_service, webrtc_svc=None):
+    global acquisition_service, webrtc_service
     acquisition_service = acq_service
+    webrtc_service = webrtc_svc
 
     @socketio.on('connect')
     def handle_connect():
@@ -101,3 +104,38 @@ def init_socketio_handlers(socketio, acq_service):
             print(f"Calibration error: {e}")
             emit('calibration_result', {'success': False})
             emit('error', {'message': f'Calibration failed: {str(e)}'})
+
+    # ------------------------------------------------------------------
+    # WebRTC signaling handlers
+    # ------------------------------------------------------------------
+
+    @socketio.on('webrtc_start')
+    def handle_webrtc_start(data=None):
+        if webrtc_service is None:
+            emit('error', {'message': 'WebRTC service not available'})
+            return
+        hostname = G3_HOSTNAME
+        if data and isinstance(data, dict):
+            hostname = data.get('hostname', hostname)
+        webrtc_service.start(hostname, request.sid)
+
+    @socketio.on('webrtc_answer')
+    def handle_webrtc_answer(data):
+        if webrtc_service is None:
+            return
+        webrtc_service.send_answer(data.get('sdp', ''))
+
+    @socketio.on('webrtc_ice_candidate')
+    def handle_webrtc_ice_candidate(data):
+        if webrtc_service is None:
+            return
+        webrtc_service.add_ice_candidate(
+            data.get('sdpMLineIndex', 0),
+            data.get('candidate', ''),
+        )
+
+    @socketio.on('webrtc_stop')
+    def handle_webrtc_stop():
+        if webrtc_service is None:
+            return
+        webrtc_service.stop()
