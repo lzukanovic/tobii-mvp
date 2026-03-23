@@ -1,30 +1,13 @@
 """
 WebRTC signaling service for Tobii Pro Glasses 3.
 
-Uses g3pylib's existing G3WebSocketClientProtocol connection (the same one
-used for gaze/IMU streaming) instead of opening a separate WebSocket.
+Handles the full g3api WebRTC signaling exchange using g3pylib's existing
+connection (the same one used for gaze/IMU streaming). g3pylib's receiver
+task dispatches both RPC responses and signal events on that connection,
+so no separate WebSocket or receive loop is needed here.
 
-g3pylib's receiver task is always running while connected, so it dispatches
-both RPC responses (via futures) and signal events (via asyncio.Queue) on
-the shared connection — no separate receive loop needed here.
-
-Flow:
-  AcquisitionService calls set_connection(g3) after connecting and
-  clear_connection() before disconnecting.
-
-  WebRTC signaling (triggered by browser via Socket.IO):
-    require_post /!remote-host          → real local IP (.local replacement)
-    require_post //webrtc!create        → session UUID
-    subscribe_to_signal :new-ice-candidate → asyncio.Queue of ICE bodies
-    require_post //webrtc/<uuid>!setup  → SDP offer  →  emit webrtc_offer
-    keepalive every 4 s
-    ice_queue.get() loop               → emit webrtc_glasses_ice_candidate
-    [browser answer arrives]
-    require_post //webrtc/<uuid>!start  (called from send_answer)
-    [browser ICE candidates arrive]
-    require_post //webrtc/<uuid>!add-ice-candidate (called from add_ice_candidate)
-    [stop() called]
-    cancel keepalive, unsubscribe ICE, require_post //webrtc!delete
+AcquisitionService calls set_connection(g3) after connecting to the glasses
+and clear_connection() before disconnecting.
 """
 import asyncio
 import logging
@@ -44,9 +27,7 @@ class WebRTCSignalingService:
         self._session_uuid = None
         self._webrtc_task = None
 
-    # ------------------------------------------------------------------
-    # Connection lifecycle — called by AcquisitionService
-    # ------------------------------------------------------------------
+    # Connection lifecycle
 
     def set_connection(self, g3):
         """Store g3pylib's WebSocket after glasses connect."""
@@ -57,9 +38,7 @@ class WebRTCSignalingService:
         self.stop()
         self._g3ws = None
 
-    # ------------------------------------------------------------------
-    # Public API — called from sync Flask/Socket.IO handlers
-    # ------------------------------------------------------------------
+    # Public API
 
     def start(self, sid):
         """Begin WebRTC signaling using the existing g3pylib connection."""
@@ -103,9 +82,7 @@ class WebRTCSignalingService:
             self._webrtc_task.cancel()
             self._webrtc_task = None
 
-    # ------------------------------------------------------------------
-    # Async internals — run on the shared background event loop
-    # ------------------------------------------------------------------
+    # Async internals
 
     async def _run(self, sid):
         unsubscribe = None
@@ -134,7 +111,7 @@ class WebRTCSignalingService:
             )
             logger.info("[WebRTC] Got SDP offer from glasses")
 
-            # 5. Start keepalive — glasses drop the session after ~20 s
+            # 5. Start keepalive (glasses drop the session after ~20 s without it)
             keepalive_task = asyncio.create_task(self._keepalive_loop())
 
             # 6. Send offer to browser

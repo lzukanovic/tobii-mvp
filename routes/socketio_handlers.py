@@ -105,9 +105,7 @@ def init_socketio_handlers(socketio, acq_service, webrtc_svc=None):
             emit('calibration_result', {'success': False})
             emit('error', {'message': f'Calibration failed: {str(e)}'})
 
-    # ------------------------------------------------------------------
     # WebRTC signaling handlers
-    # ------------------------------------------------------------------
 
     @socketio.on('webrtc_start')
     def handle_webrtc_start(data=None):

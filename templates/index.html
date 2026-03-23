@@ -521,9 +521,7 @@
       const MAX_POINTS = 100;
       const MAX_LINE_POINTS = 200;
 
-      // ---------------------------------------------------------------
       // Charts
-      // ---------------------------------------------------------------
 
       // Gaze 2D - scatter
       const gazeChart = new Chart(
@@ -818,9 +816,7 @@
         },
       );
 
-      // ---------------------------------------------------------------
       // Socket events
-      // ---------------------------------------------------------------
 
       socket.on("connect", () => {
         showSuccess("Connected to server");
@@ -858,13 +854,7 @@
         loadRecordings();
       });
 
-      // ---------------------------------------------------------------
-      // Data handlers
-      // ---------------------------------------------------------------
-
-      // ---------------------------------------------------------------
       // Live Gaze Canvas
-      // ---------------------------------------------------------------
 
       const gazeCanvas = document.getElementById("gazeCanvas");
       const gazeCtx = gazeCanvas.getContext("2d");
@@ -1008,9 +998,7 @@
         gyroChart.update("none");
       }
 
-      // ---------------------------------------------------------------
       // Status
-      // ---------------------------------------------------------------
 
       function updateStatus(s) {
         const connected = s.connected;
@@ -1029,7 +1017,6 @@
         document.getElementById("statusSerial").textContent = s.serial || "--";
         document.getElementById("statusFirmware").textContent =
           s.firmware || "--";
-        console.log(s);
         document.getElementById("statusBattery").textContent =
           s.battery == null ? "--%" : s.battery + "%";
         document.getElementById("statusCharging").textContent =
@@ -1067,9 +1054,7 @@
         if (s.error) showError(s.error);
       }
 
-      // ---------------------------------------------------------------
       // Actions
-      // ---------------------------------------------------------------
 
       function connectDevice() {
         const hostname = document.getElementById("hostname").value.trim();
@@ -1083,6 +1068,7 @@
       }
 
       function disconnectDevice() {
+        if (webrtcPeer) stopWebRTC();
         socket.emit("disconnect_device");
       }
 
@@ -1146,9 +1132,7 @@
         gyroChart.update();
       }
 
-      // ---------------------------------------------------------------
       // Toastify helpers
-      // ---------------------------------------------------------------
 
       function toast(
         message,
@@ -1169,9 +1153,7 @@
       const showError = (msg) =>
         toast(msg, { background: "#ef4444", duration: 6000 });
 
-      // ---------------------------------------------------------------
       // Recordings
-      // ---------------------------------------------------------------
 
       function loadRecordings() {
         fetch("/api/recordings")

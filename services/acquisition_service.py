@@ -55,9 +55,7 @@ class AcquisitionService:
         self.sync_data = []
         self.recording_metadata = {}
 
-    # ------------------------------------------------------------------
     # Connection
-    # ------------------------------------------------------------------
 
     def connect(self, hostname):
         """Connect to glasses. Blocks until connected or raises."""
@@ -134,9 +132,7 @@ class AcquisitionService:
             self._g3 = None
             self._g3_context = None
 
-    # ------------------------------------------------------------------
     # Streaming
-    # ------------------------------------------------------------------
 
     def start_streaming(self, gaze_decimation=None, imu_decimation=None):
         """Subscribe to gaze/IMU/event/sync and start receiver tasks."""
@@ -231,9 +227,7 @@ class AcquisitionService:
         self._event_unsub = None
         self._sync_unsub = None
 
-    # ------------------------------------------------------------------
     # Receiver coroutines
-    # ------------------------------------------------------------------
 
     async def _gaze_receiver(self, queue):
         """Receive gaze samples, store all, decimate for browser."""
@@ -458,9 +452,7 @@ class AcquisitionService:
         except Exception as e:
             logger.error("SyncPort receiver error: %s", e)
 
-    # ------------------------------------------------------------------
     # Calibration
-    # ------------------------------------------------------------------
 
     def run_calibration(self):
         """Run calibration procedure. Blocks until done."""
@@ -482,9 +474,7 @@ class AcquisitionService:
                 success = await self._g3.rudimentary.calibrate()
         return bool(success)
 
-    # ------------------------------------------------------------------
     # Helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _parse_sample(sample):

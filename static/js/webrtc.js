@@ -1,35 +1,28 @@
-/**
- * WebRTC Live View — Tobii Pro Glasses 3
+/*
+ * WebRTC Live View - Tobii Pro Glasses 3
  *
- * Flask is the full WebRTC signaling server. This file contains only the
- * browser-side WebRTC logic: it has no knowledge of the g3api protocol.
+ * Browser-side only. Flask handles all g3api signaling using the existing
+ * glasses connection.
  *
- * Flow:
- *   1. User clicks Start → emit webrtc_start to Flask (with hostname)
- *   2. Flask opens dedicated WS to glasses, runs g3api signaling, emits
- *      webrtc_offer with the glasses' SDP offer.
- *   3. Browser: SdpDesc parsing/stream suspension → setRemoteDescription →
- *      createAnswer → setLocalDescription → emit webrtc_answer.
- *   4. Browser ICE candidates → emit webrtc_ice_candidate to Flask.
- *      Flask replaces .local addresses and forwards to glasses.
- *   5. Glasses ICE candidates → Flask emits webrtc_glasses_ice_candidate →
- *      browser addIceCandidate.
+ * Signaling flow:
+ *   1. User clicks Start - browser emits webrtc_start to Flask
+ *   2. Flask runs g3api signaling and emits webrtc_offer with the glasses SDP offer
+ *   3. Browser parses and filters the SDP, sets remote description,
+ *      creates an answer, and emits webrtc_answer to Flask
+ *   4. Browser ICE candidates are emitted as webrtc_ice_candidate to Flask,
+ *      which handles .local replacement and forwards them to the glasses
+ *   5. Glasses ICE candidates arrive as webrtc_glasses_ice_candidate from Flask,
+ *      browser calls addIceCandidate for each one
  *
- * Depends on globals defined in index.html: socket, showError
+ * Depends on globals from index.html: socket, showError
  */
 
-// ---------------------------------------------------------------------------
 // State
-// ---------------------------------------------------------------------------
-
 let webrtcPeer = null;
 let pendingGlassesCandidates = [];
-let mlineIndexToMid = {};          // sdpMLineIndex → sdpMid (built from offer SDP)
+let mlineIndexToMid = {}; // built from offer SDP, used when adding glasses candidates
 
-// ---------------------------------------------------------------------------
-// SDP parsing (mirrors Tobii reference client)
-// ---------------------------------------------------------------------------
-
+// SDP helper - mirrors Tobii reference client implementation
 class SdpDesc {
   constructor(sdp) {
     this.sess = [];
@@ -57,7 +50,7 @@ class SdpDesc {
     return sdp + "\r\n";
   }
 
-  /** Zero out the port for a stream mid to signal we won't receive it. */
+  // Zero out the port for a stream to signal we won't receive it
   suspend(mid) {
     if (!(mid in this.streams)) return false;
     for (let i in this.streams[mid]) {
@@ -74,12 +67,10 @@ class SdpDesc {
 
 const WANTED_MIDS = new Set(["scenevideo", "sceneaudio", "eyesvideo"]);
 
-// ---------------------------------------------------------------------------
-// Socket.IO listeners (registered at load time)
-// ---------------------------------------------------------------------------
+// Socket.IO listeners
 
 socket.on("webrtc_offer", async (data) => {
-  await _handleOffer(data.sdp);
+  await handleOffer(data.sdp);
 });
 
 socket.on("webrtc_glasses_ice_candidate", (data) => {
@@ -88,29 +79,25 @@ socket.on("webrtc_glasses_ice_candidate", (data) => {
     sdpMid: mlineIndexToMid[data.sdpMLineIndex] ?? null,
     candidate: data.candidate,
   };
-  console.log(`[WebRTC] Glasses ICE [mline=${iceInit.sdpMLineIndex}]:`, iceInit.candidate);
+  console.log(
+    `[WebRTC] Glasses ICE [mline=${iceInit.sdpMLineIndex}]:`,
+    iceInit.candidate,
+  );
   if (!webrtcPeer || !webrtcPeer.remoteDescription) {
     pendingGlassesCandidates.push(iceInit);
   } else {
     webrtcPeer
       .addIceCandidate(new RTCIceCandidate(iceInit))
-      .catch((e) => console.warn("[WebRTC] addIceCandidate failed:", e, iceInit));
+      .catch((e) =>
+        console.warn("[WebRTC] addIceCandidate failed:", e, iceInit),
+      );
   }
 });
 
-// ---------------------------------------------------------------------------
 // WebRTC lifecycle
-// ---------------------------------------------------------------------------
 
 async function startWebRTC() {
   document.getElementById("btnWebrtcStart").disabled = true;
-
-  const hostname = document.getElementById("hostname").value.trim();
-  if (!hostname) {
-    showError("Enter a hostname before starting live view");
-    document.getElementById("btnWebrtcStart").disabled = false;
-    return;
-  }
 
   try {
     pendingGlassesCandidates = [];
@@ -129,9 +116,9 @@ async function startWebRTC() {
       if (ev.candidate) {
         console.log(
           `[WebRTC] Local candidate [mline=${ev.candidate.sdpMLineIndex}]:`,
-          ev.candidate.candidate
+          ev.candidate.candidate,
         );
-        // Flask handles .local → real IP replacement before forwarding to glasses
+        // Flask handles .local to real IP replacement before forwarding to glasses
         socket.emit("webrtc_ice_candidate", {
           sdpMLineIndex: ev.candidate.sdpMLineIndex,
           candidate: ev.candidate.candidate,
@@ -143,7 +130,12 @@ async function startWebRTC() {
 
     webrtcPeer.ontrack = (ev) => {
       const mid = ev.transceiver && ev.transceiver.mid;
-      console.log("[WebRTC] Track received — kind:", ev.track.kind, "mid:", mid);
+      console.log(
+        "[WebRTC] Track received - kind:",
+        ev.track.kind,
+        "mid:",
+        mid,
+      );
       if (ev.track.kind === "video" && (!mid || mid === "scenevideo")) {
         const video = document.getElementById("webrtcVideo");
         video.srcObject = ev.streams[0] || new MediaStream([ev.track]);
@@ -151,25 +143,21 @@ async function startWebRTC() {
       }
     };
 
-    // Ask Flask to start signaling with the glasses
-    socket.emit("webrtc_start", { hostname });
-    console.log("[WebRTC] Signaling request sent to Flask, waiting for offer...");
-
-    // Remainder of setup continues in _handleOffer() when Flask emits webrtc_offer
-
+    socket.emit("webrtc_start");
+    console.log("[WebRTC] Waiting for offer from Flask...");
   } catch (err) {
     console.error("[WebRTC] Setup failed:", err);
     showError("WebRTC start failed: " + err.message);
-    _teardownWebRTC();
+    teardownWebRTC();
     document.getElementById("btnWebrtcStart").disabled = false;
   }
 }
 
-async function _handleOffer(offerSdp) {
+async function handleOffer(offerSdp) {
   try {
     console.log("[WebRTC] Received SDP offer from Flask");
 
-    // Parse SDP, build mlineIndex→mid map, suspend unwanted video streams
+    // Parse SDP, build mlineIndex to mid map, suspend unwanted video streams
     const desc = new SdpDesc(offerSdp);
     let mlineIdx = 0;
     for (const mid in desc.streams) {
@@ -177,18 +165,19 @@ async function _handleOffer(offerSdp) {
       const isVideo = desc.streams[mid].some((l) => l.startsWith("m=video"));
       if (isVideo && !WANTED_MIDS.has(mid)) {
         desc.suspend(mid);
-        console.log(`[WebRTC] Suspended stream: ${mid}`);
+        console.log("[WebRTC] Suspended stream:", mid);
       }
       mlineIdx++;
     }
 
-    // Set remote description (glasses' offer)
     await webrtcPeer.setRemoteDescription(
-      new RTCSessionDescription({ type: "offer", sdp: desc.to_sdp() })
+      new RTCSessionDescription({ type: "offer", sdp: desc.to_sdp() }),
     );
 
     // Flush candidates that arrived before remote description was set
-    console.log(`[WebRTC] Flushing ${pendingGlassesCandidates.length} queued candidates`);
+    console.log(
+      `[WebRTC] Flushing ${pendingGlassesCandidates.length} queued candidates`,
+    );
     for (const c of pendingGlassesCandidates) {
       await webrtcPeer
         .addIceCandidate(new RTCIceCandidate(c))
@@ -196,32 +185,33 @@ async function _handleOffer(offerSdp) {
     }
     pendingGlassesCandidates = [];
 
-    // Create answer and send to Flask (which forwards to glasses via !start)
     const answer = await webrtcPeer.createAnswer();
     await webrtcPeer.setLocalDescription(answer);
     console.log("[WebRTC] Sending answer to Flask");
     socket.emit("webrtc_answer", { sdp: answer.sdp });
 
     document.getElementById("btnWebrtcStop").disabled = false;
-
   } catch (err) {
     console.error("[WebRTC] handleOffer failed:", err);
     showError("WebRTC offer handling failed: " + err.message);
-    _teardownWebRTC();
+    teardownWebRTC();
     document.getElementById("btnWebrtcStart").disabled = false;
   }
 }
 
 function stopWebRTC() {
   socket.emit("webrtc_stop");
-  _teardownWebRTC();
+  teardownWebRTC();
   document.getElementById("webrtcPlaceholder").style.display = "flex";
   document.getElementById("btnWebrtcStart").disabled = false;
   document.getElementById("btnWebrtcStop").disabled = true;
 }
 
-function _teardownWebRTC() {
-  if (webrtcPeer) { webrtcPeer.close(); webrtcPeer = null; }
+function teardownWebRTC() {
+  if (webrtcPeer) {
+    webrtcPeer.close();
+    webrtcPeer = null;
+  }
   pendingGlassesCandidates = [];
   mlineIndexToMid = {};
   document.getElementById("webrtcVideo").srcObject = null;
