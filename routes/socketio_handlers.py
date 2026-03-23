@@ -114,10 +114,7 @@ def init_socketio_handlers(socketio, acq_service, webrtc_svc=None):
         if webrtc_service is None:
             emit('error', {'message': 'WebRTC service not available'})
             return
-        hostname = G3_HOSTNAME
-        if data and isinstance(data, dict):
-            hostname = data.get('hostname', hostname)
-        webrtc_service.start(hostname, request.sid)
+        webrtc_service.start(request.sid)
 
     @socketio.on('webrtc_answer')
     def handle_webrtc_answer(data):

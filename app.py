@@ -45,8 +45,8 @@ def create_app():
     data_queue = Queue(maxsize=DATA_QUEUE_MAX_SIZE)
 
     # Initialize services
-    acquisition_service = AcquisitionService(data_queue, socketio)
     webrtc_service = WebRTCSignalingService(socketio)
+    acquisition_service = AcquisitionService(data_queue, socketio, webrtc_service)
 
     # Initialize routes
     init_routes(acquisition_service)

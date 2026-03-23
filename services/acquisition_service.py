@@ -19,10 +19,11 @@ logger = logging.getLogger(__name__)
 class AcquisitionService:
     """Manages Tobii glasses connection, streaming, and calibration."""
 
-    def __init__(self, data_queue, socketio):
+    def __init__(self, data_queue, socketio, webrtc_service=None):
         self.data_queue = data_queue
         self.socketio = socketio
         self.status = DeviceStatus()
+        self._webrtc_service = webrtc_service
 
         # g3pylib objects (managed on the async loop)
         self._g3 = None
@@ -102,6 +103,9 @@ class AcquisitionService:
         self.status.connected = True
         self.status.error = None
 
+        if self._webrtc_service:
+            self._webrtc_service.set_connection(self._g3)
+
         logger.info(
             "Connected to %s (serial=%s, fw=%s, battery=%.1f%%, charging=%s)",
             hostname, self.status.serial, self.status.firmware, self.status.battery, self.status.charging
@@ -123,6 +127,8 @@ class AcquisitionService:
             self.status.reset()
 
     async def _async_disconnect(self):
+        if self._webrtc_service:
+            self._webrtc_service.clear_connection()
         if self._g3_context is not None:
             await self._g3_context.__aexit__(None, None, None)
             self._g3 = None
