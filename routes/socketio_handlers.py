@@ -134,3 +134,11 @@ def init_socketio_handlers(socketio, acq_service, webrtc_svc=None):
         if webrtc_service is None:
             return
         webrtc_service.stop()
+
+    @socketio.on('set_gaze_overlay')
+    def handle_set_gaze_overlay(data):
+        try:
+            enabled = bool(data.get('enabled', False))
+            acquisition_service.set_gaze_overlay(enabled)
+        except Exception as e:
+            emit('error', {'message': f'Failed to set gaze overlay: {str(e)}'})

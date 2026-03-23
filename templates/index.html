@@ -181,6 +181,12 @@
         opacity: 0.5;
         cursor: not-allowed;
       }
+      .checkbox-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+      }
 
       .charts-grid {
         display: grid;
@@ -466,6 +472,15 @@
           >
             Unmute
           </button>
+          <label class="checkbox-group">
+            <input
+              type="checkbox"
+              id="chkGazeOverlay"
+              checked
+              onchange="onGazeOverlayChange(this.checked)"
+            />
+            Gaze overlay
+          </label>
         </div>
         <div class="webrtc-video-wrapper">
           <video id="webrtcVideo" autoplay playsinline muted></video>
@@ -473,11 +488,13 @@
             Connect to glasses and press Start Live View
           </div>
         </div>
-        <div class="webrtc-video-wrapper" style="margin-top: 10px; max-height: 200px;" id="eyesVideoWrapper">
+        <div
+          class="webrtc-video-wrapper"
+          style="margin-top: 10px; max-height: 200px"
+          id="eyesVideoWrapper"
+        >
           <video id="eyesVideo" autoplay playsinline muted></video>
-          <div class="webrtc-placeholder" id="eyesPlaceholder">
-            Eye cameras
-          </div>
+          <div class="webrtc-placeholder" id="eyesPlaceholder">Eye cameras</div>
         </div>
       </div>
 

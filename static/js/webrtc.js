@@ -142,6 +142,8 @@ async function startWebRTC() {
       }
     };
 
+    const gazeOverlay = document.getElementById("chkGazeOverlay").checked;
+    socket.emit("set_gaze_overlay", { enabled: gazeOverlay });
     socket.emit("webrtc_start");
     console.log("[WebRTC] Waiting for offer from Flask...");
   } catch (err) {
@@ -201,6 +203,7 @@ async function handleOffer(offerSdp) {
 
 function stopWebRTC() {
   socket.emit("webrtc_stop");
+  socket.emit("set_gaze_overlay", { enabled: false });
   teardownWebRTC();
   document.getElementById("webrtcPlaceholder").style.display = "flex";
   document.getElementById("btnWebrtcStart").disabled = false;
@@ -214,6 +217,13 @@ function toggleMute() {
   const btn = document.getElementById("btnWebrtcMute");
   video.muted = !video.muted;
   btn.textContent = video.muted ? "Unmute" : "Mute";
+}
+
+function onGazeOverlayChange(enabled) {
+  // Only send to glasses when a live view session is active
+  if (webrtcPeer) {
+    socket.emit("set_gaze_overlay", { enabled });
+  }
 }
 
 function teardownWebRTC() {

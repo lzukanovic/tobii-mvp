@@ -503,3 +503,9 @@ class AcquisitionService:
             self.gaze_decimation = int(gaze_decimation)
         if imu_decimation is not None and imu_decimation >= 1:
             self.imu_decimation = int(imu_decimation)
+
+    def set_gaze_overlay(self, enabled: bool):
+        """Enable or disable the built-in gaze overlay on the glasses scene camera."""
+        if not self.status.connected:
+            raise RuntimeError("Not connected")
+        run_coroutine_sync(self._g3._connection.require_post("//settings.gaze-overlay", enabled))
