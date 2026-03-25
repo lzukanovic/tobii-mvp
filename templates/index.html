@@ -276,11 +276,88 @@
       .btn-download:hover {
         background: #203a43;
       }
+      .btn-sm {
+        padding: 6px 14px;
+        font-size: 12px;
+      }
+      .recording-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-shrink: 0;
+      }
 
       @media (max-width: 900px) {
         .charts-grid {
           grid-template-columns: 1fr;
         }
+      }
+
+      /* Playback modal */
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+      .modal-dialog {
+        background: #fff;
+        border-radius: 12px;
+        overflow: hidden;
+        max-width: 80vw;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      }
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: #fff;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .modal-header h3 {
+        font-size: 15px;
+        color: #333;
+        margin: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .modal-header-controls {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        flex-shrink: 0;
+      }
+      .modal-close {
+        background: none;
+        border: none;
+        color: #666;
+        font-size: 22px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0 2px;
+      }
+      .modal-close:hover {
+        color: #333;
+      }
+      .modal-video {
+        width: 100%;
+        aspect-ratio: 16/9;
+        display: block;
+        background: #000;
+        object-fit: contain;
+      }
+      .modal-footer {
+        display: flex;
+        gap: 10px;
+        padding: 10px 16px;
+        background: #fff;
+        border-top: 1px solid #e5e7eb;
+        align-items: center;
       }
 
       .webrtc-video-wrapper {
@@ -393,10 +470,17 @@
         </div>
       </div>
 
-      <!-- Streaming Controls -->
+      <!-- Recording Controls -->
       <div class="panel">
-        <h2>Streaming</h2>
+        <h2>Recording</h2>
         <div class="status-grid" style="margin-bottom: 12px">
+          <div class="status-item off" id="statusRecording">
+            <div class="label">Video Recording</div>
+            <div class="value">
+              <span class="indicator off" id="recIndicator"></span
+              ><span id="recText">Idle</span>
+            </div>
+          </div>
           <div class="status-item">
             <div class="label">Gaze Samples</div>
             <div class="value" id="gazeSamples">0</div>
@@ -432,7 +516,7 @@
             onclick="startStreaming()"
             disabled
           >
-            Start Streaming
+            Start Recording
           </button>
           <button
             class="btn-stop"
@@ -440,7 +524,16 @@
             onclick="stopStreaming()"
             disabled
           >
-            Stop Streaming
+            Stop Recording
+          </button>
+          <button
+            class="btn-calibrate"
+            id="btnCancelRec"
+            onclick="cancelRecording()"
+            disabled
+            title="Cancel video recording on device (discards video, keeps data stream)"
+          >
+            Cancel Video
           </button>
         </div>
       </div>
@@ -538,11 +631,72 @@
         </div>
       </div>
 
-      <!-- Recordings Panel -->
+      <!-- Video Recordings (Device SD card) -->
       <div class="panel" style="margin-top: 20px">
-        <h2>Recordings</h2>
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+          "
+        >
+          <h2 style="margin-bottom: 0">Video Recordings (Device)</h2>
+          <button
+            class="btn-connect"
+            id="btnRefreshDeviceRec"
+            onclick="loadDeviceRecordings()"
+            disabled
+          >
+            Refresh
+          </button>
+        </div>
+        <div id="deviceRecordingsList">
+          <p style="color: #999; font-style: italic">
+            Connect to device to load recordings
+          </p>
+        </div>
+      </div>
+
+      <!-- Data Recordings (Local CSV) -->
+      <div class="panel" style="margin-top: 20px">
+        <h2>Data Recordings (Local CSV)</h2>
         <div id="recordingsList">
           <p style="color: #999; font-style: italic">No recordings available</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Playback Modal -->
+    <div id="playbackModal" style="display: none">
+      <div class="modal-backdrop" onclick="handleBackdropClick(event)">
+        <div class="modal-dialog" onclick="event.stopPropagation()">
+          <div class="modal-header">
+            <h3 id="playbackTitle">Recording Playback</h3>
+            <div class="modal-header-controls">
+              <button
+                class="modal-close"
+                onclick="replayPlayback()"
+                title="Replay"
+              >
+                &#8634;
+              </button>
+              <button
+                class="modal-close"
+                onclick="closePlayback()"
+                title="Close"
+              >
+                &times;
+              </button>
+            </div>
+          </div>
+          <video
+            id="playbackVideo"
+            class="modal-video"
+            autoplay
+            playsinline
+            controls
+          ></video>
         </div>
       </div>
     </div>
@@ -858,7 +1012,12 @@
         showError("Disconnected from server");
       });
 
-      socket.on("status_update", (s) => updateStatus(s));
+      let _wasConnected = false;
+      socket.on("status_update", (s) => {
+        updateStatus(s);
+        if (s.connected && !_wasConnected) loadDeviceRecordings();
+        _wasConnected = s.connected;
+      });
       socket.on("error", (e) => showError(e.message));
 
       socket.on("calibration_result", (r) => {
@@ -881,9 +1040,10 @@
 
       socket.on("new_recording", (r) => {
         showSuccess(
-          `Recording saved: ${r.files.join(", ")} (${r.gaze_samples} gaze, ${r.imu_samples} IMU samples)`,
+          `Data saved: ${r.files.join(", ")} (${r.gaze_samples} gaze, ${r.imu_samples} IMU samples)`,
         );
         loadRecordings();
+        loadDeviceRecordings();
       });
 
       // Live Gaze Canvas
@@ -1070,6 +1230,20 @@
           document.getElementById("calText").textContent = "Calibrated";
         }
 
+        // Recording indicator
+        const recInd = document.getElementById("recIndicator");
+        const recText = document.getElementById("recText");
+        const recStatus = document.getElementById("statusRecording");
+        if (s.recording) {
+          recInd.className = "indicator on";
+          recText.textContent = "Recording";
+          recStatus.className = "status-item ok";
+        } else {
+          recInd.className = "indicator off";
+          recText.textContent = "Idle";
+          recStatus.className = "status-item off";
+        }
+
         // Buttons
         document.getElementById("btnConnect").disabled = connected;
         document.getElementById("btnDisconnect").disabled = !connected;
@@ -1078,6 +1252,8 @@
         document.getElementById("btnStart").disabled =
           !connected || s.streaming;
         document.getElementById("btnStop").disabled = !s.streaming;
+        document.getElementById("btnCancelRec").disabled = !s.recording;
+        document.getElementById("btnRefreshDeviceRec").disabled = !connected;
         // WebRTC start enabled when connected and no session active
         if (!webrtcPeer) {
           document.getElementById("btnWebrtcStart").disabled = !connected;
@@ -1116,6 +1292,44 @@
 
       function stopStreaming() {
         socket.emit("stop_streaming");
+      }
+
+      // Playback modal controls (called from webrtc.js too)
+
+      let currentPlaybackUuid = null;
+
+      function openPlaybackModal(title, uuid) {
+        if (uuid !== undefined) currentPlaybackUuid = uuid;
+        document.getElementById("playbackTitle").textContent =
+          title || "Recording Playback";
+        document.getElementById("playbackModal").style.display = "block";
+      }
+
+      function closePlayback() {
+        document.getElementById("playbackModal").style.display = "none";
+        document.getElementById("playbackVideo").srcObject = null;
+        if (typeof stopWebRTC === "function") stopWebRTC();
+      }
+
+      function handleBackdropClick(event) {
+        if (event.target === event.currentTarget) closePlayback();
+      }
+
+      function replayPlayback() {
+        if (!currentPlaybackUuid) return;
+        const title = document.getElementById("playbackTitle").textContent;
+        if (typeof playRecording === "function")
+          playRecording(currentPlaybackUuid, title);
+      }
+
+      function cancelRecording() {
+        if (
+          !confirm(
+            "Cancel video recording on device? The video will be deleted (local data recording continues).",
+          )
+        )
+          return;
+        socket.emit("cancel_recording");
       }
 
       function runCalibration() {
@@ -1183,7 +1397,98 @@
       const showError = (msg) =>
         toast(msg, { background: "#ef4444", duration: 6000 });
 
-      // Recordings
+      // Device Recordings (glasses SD card)
+
+      function loadDeviceRecordings() {
+        const btn = document.getElementById("btnRefreshDeviceRec");
+        if (btn) btn.disabled = true;
+        fetch("/api/device-recordings")
+          .then((r) => r.json())
+          .then((data) => {
+            if (data.error) {
+              showError("Failed to load device recordings: " + data.error);
+              return;
+            }
+            renderDeviceRecordings(data);
+          })
+          .catch(() => showError("Error loading device recordings"))
+          .finally(() => {
+            if (btn) btn.disabled = false;
+          });
+      }
+
+      function renderDeviceRecordings(recordings) {
+        const list = document.getElementById("deviceRecordingsList");
+        if (!recordings.length) {
+          list.innerHTML =
+            '<p style="color:#999;font-style:italic">No recordings on device</p>';
+          return;
+        }
+        let html = "";
+        recordings.forEach((rec) => {
+          const name = rec.visible_name || rec.folder || rec.uuid;
+          const date = rec.created
+            ? new Date(rec.created).toLocaleString()
+            : "Unknown date";
+          const dur =
+            rec.duration != null ? formatDuration(rec.duration) : "--";
+          const gazeS =
+            rec.gaze_samples != null
+              ? rec.gaze_samples.toLocaleString() + " gaze samples"
+              : "";
+          const info = [date, dur, gazeS].filter(Boolean).join(" | ");
+          const safeName = escapeHtml(name).replace(/'/g, "\\'");
+          html += `
+            <div class="recording-item">
+              <div class="recording-info">
+                <h3>${escapeHtml(name)}</h3>
+                <p>${info}</p>
+              </div>
+              <div class="recording-actions">
+                <button class="btn-start btn-sm" onclick="playRecording('${rec.uuid}', '${safeName}')">Play</button>
+                <button class="btn-stop btn-sm" onclick="deleteDeviceRecording('${rec.uuid}')">Delete</button>
+              </div>
+            </div>`;
+        });
+        list.innerHTML = html;
+      }
+
+      function formatDuration(seconds) {
+        if (seconds == null) return "--";
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        return `${m}:${s.toString().padStart(2, "0")}`;
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function deleteDeviceRecording(uuid) {
+        if (
+          !confirm(
+            "Delete this recording from the device? This cannot be undone.",
+          )
+        )
+          return;
+        fetch(`/api/device-recordings/${uuid}`, { method: "DELETE" })
+          .then((r) => r.json())
+          .then((data) => {
+            if (data.success) {
+              showSuccess("Recording deleted from device");
+              loadDeviceRecordings();
+            } else {
+              showError("Failed to delete: " + (data.error || "unknown error"));
+            }
+          })
+          .catch(() => showError("Error deleting recording"));
+      }
+
+      // Local CSV Recordings
 
       function loadRecordings() {
         fetch("/api/recordings")
@@ -1220,7 +1525,10 @@
       // Initial load
       fetch("/api/status")
         .then((r) => r.json())
-        .then((s) => updateStatus(s))
+        .then((s) => {
+          updateStatus(s);
+          if (s.connected) loadDeviceRecordings();
+        })
         .catch(() => {});
       loadRecordings();
 

@@ -59,20 +59,35 @@ def init_socketio_handlers(socketio, acq_service, webrtc_svc=None):
                 gaze_dec = data.get('gaze_decimation', gaze_dec)
                 imu_dec = data.get('imu_decimation', imu_dec)
 
+            # Start glasses hardware recording FIRST, before data streams open.
+            # Starting recorder.start() after the high-frequency gaze/IMU stream
+            # is active can overwhelm the shared WebSocket and drop the connection.
+            acquisition_service.start_glasses_recording()
+
+            # Then open data streams (gaze/IMU subscriptions + keepalive)
             acquisition_service.start_streaming(gaze_dec, imu_dec)
+
             emit('status_update', acquisition_service.get_status())
 
         except Exception as e:
-            print(f"Error starting streaming: {e}")
-            emit('error', {'message': f'Failed to start streaming: {str(e)}'})
+            print(f"Error starting recording: {e}")
+            emit('error', {'message': f'Failed to start recording: {str(e)}'})
 
     @socketio.on('stop_streaming')
     def handle_stop_streaming():
         try:
+            # Stop data streams first so the WebSocket quiets down,
+            # then stop the glasses hardware recording.
             acquisition_service.stop_streaming()
 
-            # Save recordings
-            files = save_recordings(
+            try:
+                acquisition_service.stop_glasses_recording()
+            except Exception as e:
+                print(f"Warning: failed to stop glasses recording: {e}")
+                emit('error', {'message': f'Glasses recording stop failed: {str(e)}'})
+
+            # Save local CSV recordings
+            save_recordings(
                 acquisition_service.gaze_data,
                 acquisition_service.imu_data,
                 acquisition_service.recording_metadata,
@@ -82,8 +97,17 @@ def init_socketio_handlers(socketio, acq_service, webrtc_svc=None):
             emit('status_update', acquisition_service.get_status())
 
         except Exception as e:
-            print(f"Error stopping streaming: {e}")
-            emit('error', {'message': f'Failed to stop streaming: {str(e)}'})
+            print(f"Error stopping recording: {e}")
+            emit('error', {'message': f'Failed to stop recording: {str(e)}'})
+
+    @socketio.on('cancel_recording')
+    def handle_cancel_recording():
+        try:
+            acquisition_service.cancel_glasses_recording()
+            emit('status_update', acquisition_service.get_status())
+        except Exception as e:
+            print(f"Error cancelling recording: {e}")
+            emit('error', {'message': f'Failed to cancel recording: {str(e)}'})
 
     @socketio.on('update_decimation')
     def handle_update_decimation(data):
@@ -113,6 +137,17 @@ def init_socketio_handlers(socketio, acq_service, webrtc_svc=None):
             emit('error', {'message': 'WebRTC service not available'})
             return
         webrtc_service.start(request.sid)
+
+    @socketio.on('webrtc_playback')
+    def handle_webrtc_playback(data):
+        if webrtc_service is None:
+            emit('error', {'message': 'WebRTC service not available'})
+            return
+        uuid = data.get('uuid') if data else None
+        if not uuid:
+            emit('error', {'message': 'Recording UUID required for playback'})
+            return
+        webrtc_service.start(request.sid, recording_uuid=uuid)
 
     @socketio.on('webrtc_answer')
     def handle_webrtc_answer(data):

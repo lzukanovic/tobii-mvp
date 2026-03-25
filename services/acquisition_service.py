@@ -99,6 +99,13 @@ class AcquisitionService:
 
         self.status.connected = True
 
+        # Check if a recording is already active on the device
+        try:
+            rec_uuid = await self._g3.recorder.get_uuid()
+            self.status.recording = rec_uuid is not None
+        except Exception:
+            pass
+
         if self._webrtc_service:
             self._webrtc_service.set_connection(self._g3)
 
@@ -112,8 +119,21 @@ class AcquisitionService:
         if not self.status.connected:
             return
 
+        # Stop data streams first, then stop recording (quieter WebSocket)
         if self._streaming:
             self.stop_streaming()
+
+        if self.status.recording:
+            try:
+                run_coroutine_sync(self._g3.recorder.stop())
+                logger.info("Recording stopped on disconnect")
+            except Exception as e:
+                logger.warning("Failed to stop recording on disconnect, cancelling: %s", e)
+                try:
+                    run_coroutine_sync(self._g3.recorder.cancel())
+                except Exception:
+                    pass
+            self.status.recording = False
 
         try:
             run_coroutine_sync(self._async_disconnect())
@@ -507,3 +527,87 @@ class AcquisitionService:
         if not self.status.connected:
             raise RuntimeError("Not connected")
         run_coroutine_sync(self._g3._connection.require_post("//settings.gaze-overlay", enabled))
+
+    # Hardware recording (SD card)
+
+    def start_glasses_recording(self):
+        """Start a hardware recording on the glasses SD card."""
+        if not self.status.connected:
+            raise RuntimeError("Not connected")
+        success = run_coroutine_sync(self._g3.recorder.start())
+        if success:
+            self.status.recording = True
+            logger.info("Glasses recording started")
+        else:
+            logger.warning("Glasses recorder.start() returned False")
+        return success
+
+    def stop_glasses_recording(self):
+        """Stop and save the ongoing hardware recording."""
+        if not self.status.recording:
+            return False
+        try:
+            success = run_coroutine_sync(self._g3.recorder.stop())
+            logger.info("Glasses recording stopped (saved)")
+            return success
+        except Exception as e:
+            logger.error("Error stopping glasses recording: %s", e)
+            raise
+        finally:
+            self.status.recording = False
+
+    def cancel_glasses_recording(self):
+        """Cancel and delete the ongoing hardware recording."""
+        if not self.status.recording:
+            return
+        try:
+            run_coroutine_sync(self._g3.recorder.cancel())
+            logger.info("Glasses recording cancelled (deleted)")
+        except Exception as e:
+            logger.error("Error cancelling glasses recording: %s", e)
+        finally:
+            self.status.recording = False
+
+    # Device recordings list
+
+    def list_device_recordings(self):
+        """List recordings stored on the glasses SD card."""
+        if not self.status.connected:
+            raise RuntimeError("Not connected")
+        return run_coroutine_sync(self._async_list_device_recordings())
+
+    async def _async_list_device_recordings(self):
+        from g3pylib.recordings.recording import Recording
+        from g3pylib.g3typing import URI
+
+        raw = await self._g3._connection.require_get(URI("/recordings"))
+        uuids = raw.get("children", [])
+
+        result = []
+        for uuid in uuids:
+            rec = Recording(self._g3._connection, URI("/recordings"), uuid, self._g3._http_url)
+            data = {"uuid": uuid}
+            for field, getter in [
+                ("folder", rec.get_folder),
+                ("visible_name", rec.get_visible_name),
+                ("gaze_samples", rec.get_gaze_samples),
+            ]:
+                try:
+                    data[field] = await getter()
+                except Exception:
+                    data[field] = None
+            try:
+                created = await rec.get_created()
+                data["created"] = created.isoformat() if created else None
+            except Exception:
+                data["created"] = None
+            try:
+                duration = await rec.get_duration()
+                data["duration"] = duration.total_seconds() if duration else None
+            except Exception:
+                data["duration"] = None
+            result.append(data)
+
+        # Newest first — ISO strings sort lexicographically so this is safe
+        result.sort(key=lambda r: r["created"] or "", reverse=True)
+        return result

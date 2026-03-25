@@ -21,6 +21,7 @@
 let webrtcPeer = null;
 let pendingGlassesCandidates = [];
 let mlineIndexToMid = {}; // built from offer SDP, used when adding glasses candidates
+let webrtcPlaybackMode = false;
 
 // SDP helper - mirrors Tobii reference client implementation
 class SdpDesc {
@@ -96,7 +97,7 @@ socket.on("webrtc_glasses_ice_candidate", (data) => {
 
 // WebRTC lifecycle
 
-async function startWebRTC() {
+async function startWebRTC(playbackUuid = null) {
   document.getElementById("btnWebrtcStart").disabled = true;
 
   try {
@@ -131,20 +132,36 @@ async function startWebRTC() {
     webrtcPeer.ontrack = (ev) => {
       const mid = ev.transceiver && ev.transceiver.mid;
       console.log("[WebRTC] Track received - kind:", ev.track.kind, "mid:", mid);
-      if (ev.track.kind === "video" && (!mid || mid === "scenevideo")) {
-        const video = document.getElementById("webrtcVideo");
-        video.srcObject = new MediaStream([ev.track]);
-        document.getElementById("webrtcPlaceholder").style.display = "none";
-      } else if (ev.track.kind === "video" && mid === "eyesvideo") {
-        const video = document.getElementById("eyesVideo");
-        video.srcObject = new MediaStream([ev.track]);
+
+      // ev.streams[0] already contains both scenevideo and sceneaudio grouped
+      // by MSID — handle only video track events to avoid double-assignment.
+      if (ev.track.kind !== "video") return;
+
+      if (mid === "eyesvideo" && !webrtcPlaybackMode) {
+        // eyesvideo has no paired audio — use its track directly
+        document.getElementById("eyesVideo").srcObject = new MediaStream([ev.track]);
         document.getElementById("eyesPlaceholder").style.display = "none";
+      } else if (!mid || mid === "scenevideo") {
+        // ev.streams[0] groups scenevideo + sceneaudio together
+        const stream = ev.streams[0] || new MediaStream([ev.track]);
+        if (webrtcPlaybackMode) {
+          document.getElementById("playbackVideo").srcObject = stream;
+        } else {
+          document.getElementById("webrtcVideo").srcObject = stream;
+          document.getElementById("webrtcPlaceholder").style.display = "none";
+        }
       }
     };
 
-    const gazeOverlay = document.getElementById("chkGazeOverlay").checked;
-    socket.emit("set_gaze_overlay", { enabled: gazeOverlay });
-    socket.emit("webrtc_start");
+    webrtcPlaybackMode = !!playbackUuid;
+    if (playbackUuid) {
+      console.log("[WebRTC] Starting playback for recording:", playbackUuid);
+      socket.emit("webrtc_playback", { uuid: playbackUuid });
+    } else {
+      const gazeOverlay = document.getElementById("chkGazeOverlay").checked;
+      socket.emit("set_gaze_overlay", { enabled: gazeOverlay });
+      socket.emit("webrtc_start");
+    }
     console.log("[WebRTC] Waiting for offer from Flask...");
   } catch (err) {
     console.error("[WebRTC] Setup failed:", err);
@@ -152,6 +169,13 @@ async function startWebRTC() {
     teardownWebRTC();
     document.getElementById("btnWebrtcStart").disabled = false;
   }
+}
+
+function playRecording(uuid, title) {
+  if (webrtcPeer) stopWebRTC();
+  // Open modal first, then start WebRTC after teardown settles
+  if (typeof openPlaybackModal === "function") openPlaybackModal(title, uuid);
+  setTimeout(() => startWebRTC(uuid), 150);
 }
 
 async function handleOffer(offerSdp) {
@@ -226,6 +250,13 @@ function onGazeOverlayChange(enabled) {
   }
 }
 
+function clearVideoElement(videoEl) {
+  if (videoEl && videoEl.srcObject) {
+    videoEl.srcObject.getTracks().forEach((t) => t.stop());
+    videoEl.srcObject = null;
+  }
+}
+
 function teardownWebRTC() {
   if (webrtcPeer) {
     webrtcPeer.close();
@@ -233,10 +264,11 @@ function teardownWebRTC() {
   }
   pendingGlassesCandidates = [];
   mlineIndexToMid = {};
+  webrtcPlaybackMode = false;
   const video = document.getElementById("webrtcVideo");
-  video.srcObject = null;
+  clearVideoElement(video);
   video.muted = true;
-  const eyesVideo = document.getElementById("eyesVideo");
-  eyesVideo.srcObject = null;
+  clearVideoElement(document.getElementById("eyesVideo"));
   document.getElementById("eyesPlaceholder").style.display = "flex";
+  clearVideoElement(document.getElementById("playbackVideo"));
 }

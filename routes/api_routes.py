@@ -18,6 +18,8 @@ def get_status():
     return jsonify(acquisition_service.get_status())
 
 
+# Local CSV recordings
+
 @api_bp.route('/recordings')
 def get_recordings():
     return jsonify(list_recordings())
@@ -29,3 +31,27 @@ def download_recording(filename):
     if not filepath:
         return jsonify({'error': 'Recording not found'}), 404
     return send_file(filepath, as_attachment=True, download_name=filename)
+
+
+# Device recordings (glasses SD card)
+
+@api_bp.route('/device-recordings')
+def get_device_recordings():
+    if not acquisition_service.status.connected:
+        return jsonify([])
+    try:
+        return jsonify(acquisition_service.list_device_recordings())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/device-recordings/<uuid>', methods=['DELETE'])
+def delete_device_recording(uuid):
+    if not acquisition_service.status.connected:
+        return jsonify({'error': 'Not connected'}), 400
+    try:
+        from services.async_bridge import run_coroutine_sync
+        success = run_coroutine_sync(acquisition_service._g3.recordings.delete(uuid))
+        return jsonify({'success': success})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

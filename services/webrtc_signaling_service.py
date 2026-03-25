@@ -40,13 +40,13 @@ class WebRTCSignalingService:
 
     # Public API
 
-    def start(self, sid):
-        """Begin WebRTC signaling using the existing g3pylib connection."""
+    def start(self, sid, recording_uuid=None):
+        """Begin WebRTC signaling. Pass recording_uuid for playback, omit for live view."""
         if self._g3ws is None:
             self.socketio.emit("error", {"message": "Not connected to glasses"}, to=sid)
             return
         self._sid = sid
-        self._webrtc_task = run_coroutine(self._run(sid))
+        self._webrtc_task = run_coroutine(self._run(sid, recording_uuid))
 
     def send_answer(self, answer_sdp):
         """Forward the browser's SDP answer to glasses via !start."""
@@ -84,7 +84,7 @@ class WebRTCSignalingService:
 
     # Async internals
 
-    async def _run(self, sid):
+    async def _run(self, sid, recording_uuid=None):
         unsubscribe = None
         keepalive_task = None
         try:
@@ -94,9 +94,16 @@ class WebRTCSignalingService:
             self._local_ip = await ws.require_post("/!remote-host", [])
             logger.info(f"[WebRTC] Local IP: {self._local_ip}")
 
-            # 2. Create WebRTC session on glasses
-            self._session_uuid = str(await ws.require_post("//webrtc!create", []))
-            logger.info(f"[WebRTC] Session UUID: {self._session_uuid}")
+            # 2. Create WebRTC session — live view or recording playback
+            if recording_uuid:
+                session_uuid_raw = await ws.require_post("//webrtc!play", [recording_uuid])
+                if session_uuid_raw is None:
+                    raise RuntimeError(f"//webrtc!play returned null for UUID {recording_uuid}")
+                self._session_uuid = str(session_uuid_raw)
+                logger.info(f"[WebRTC] Playback session UUID: {self._session_uuid} (recording: {recording_uuid})")
+            else:
+                self._session_uuid = str(await ws.require_post("//webrtc!create", []))
+                logger.info(f"[WebRTC] Live view session UUID: {self._session_uuid}")
 
             # 3. Subscribe to ICE candidates BEFORE !setup (critical ordering)
             #    g3pylib's receiver task fills ice_queue automatically

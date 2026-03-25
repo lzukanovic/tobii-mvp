@@ -17,6 +17,7 @@ class DeviceStatus:
     gaze_freq: int = 0
     gaze_samples: int = 0
     imu_samples: int = 0
+    recording: bool = False
 
     def to_dict(self):
         return asdict(self)
@@ -32,3 +33,4 @@ class DeviceStatus:
         self.gaze_freq = 0
         self.gaze_samples = 0
         self.imu_samples = 0
+        self.recording = False
