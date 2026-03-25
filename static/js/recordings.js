@@ -92,9 +92,7 @@ function renderDeviceRecordings(recordings) {
 }
 
 function deleteDeviceRecording(uuid) {
-  if (
-    !confirm("Delete this recording from the device? This cannot be undone.")
-  )
+  if (!confirm("Delete this recording from the device? This cannot be undone."))
     return;
   fetch(`/api/device-recordings/${uuid}`, { method: "DELETE" })
     .then((r) => r.json())
@@ -114,33 +112,75 @@ function deleteDeviceRecording(uuid) {
 function loadRecordings() {
   fetch("/api/recordings")
     .then((r) => r.json())
-    .then((recordings) => {
-      const list = document.getElementById("recordingsList");
-      if (!recordings.length) {
-        list.innerHTML =
-          '<p style="color:#999;font-style:italic">No recordings available</p>';
-        return;
-      }
-      let html = "";
-      recordings.forEach((rec) => {
+    .then(renderLocalRecordings)
+    .catch((err) => console.error("Error loading recordings:", err));
+}
+
+function renderLocalRecordings(recordings) {
+  const list = document.getElementById("recordingsList");
+  if (!recordings.length) {
+    list.innerHTML =
+      '<p style="color:#999;font-style:italic">No recordings available</p>';
+    return;
+  }
+
+  // Group gaze + IMU files that share the same session timestamp
+  const groups = {};
+  const ungrouped = [];
+  recordings.forEach((rec) => {
+    const m = rec.filename.match(/tobii_(?:gaze|imu)_(\d{8}_\d{6})\.csv/);
+    if (m) {
+      const key = m[1];
+      if (!groups[key]) groups[key] = { key, files: [], created: rec.created };
+      groups[key].files.push(rec);
+    } else {
+      ungrouped.push(rec);
+    }
+  });
+
+  let html = "";
+
+  Object.values(groups)
+    .sort((a, b) => b.created - a.created)
+    .forEach((group) => {
+      const date =
+        group.files[0].metadata.start_time ||
+        new Date(group.created * 1000).toLocaleString();
+      html += `<div class="recording-item" style="flex-direction:column;align-items:stretch;gap:8px">
+        <div style="font-size:13px;font-weight:600;color:#333">${date}</div>`;
+      group.files.forEach((rec) => {
         const sizeKB = (rec.size / 1024).toFixed(1);
-        const date =
-          rec.metadata.start_time ||
-          new Date(rec.created * 1000).toLocaleString();
         const samples = rec.metadata.samples || "N/A";
         const type = rec.type.toUpperCase();
         html += `
-          <div class="recording-item">
-            <div class="recording-info">
-              <h3>[${type}] ${rec.filename}</h3>
-              <p>${date} | ${samples} samples | ${sizeKB} KB</p>
-            </div>
-            <a href="/api/recordings/${rec.filename}" class="btn-download" download>Download</a>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:12px;color:#666">
+              <strong style="color:#2c5364">[${type}]</strong>
+              ${rec.filename} &mdash; ${samples} samples &mdash; ${sizeKB} KB
+            </span>
+            <a href="/api/recordings/${rec.filename}" class="btn-download btn-sm" download>Download</a>
           </div>`;
       });
-      list.innerHTML = html;
-    })
-    .catch((err) => console.error("Error loading recordings:", err));
+      html += `</div>`;
+    });
+
+  ungrouped.forEach((rec) => {
+    const sizeKB = (rec.size / 1024).toFixed(1);
+    const date =
+      rec.metadata.start_time || new Date(rec.created * 1000).toLocaleString();
+    const samples = rec.metadata.samples || "N/A";
+    const type = rec.type.toUpperCase();
+    html += `
+      <div class="recording-item">
+        <div class="recording-info">
+          <h3>[${type}] ${rec.filename}</h3>
+          <p>${date} | ${samples} samples | ${sizeKB} KB</p>
+        </div>
+        <a href="/api/recordings/${rec.filename}" class="btn-download" download>Download</a>
+      </div>`;
+  });
+
+  list.innerHTML = html;
 }
 
 // Helpers
