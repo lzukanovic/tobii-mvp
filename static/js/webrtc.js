@@ -131,7 +131,12 @@ async function startWebRTC(playbackUuid = null) {
 
     webrtcPeer.ontrack = (ev) => {
       const mid = ev.transceiver && ev.transceiver.mid;
-      console.log("[WebRTC] Track received - kind:", ev.track.kind, "mid:", mid);
+      console.log(
+        "[WebRTC] Track received - kind:",
+        ev.track.kind,
+        "mid:",
+        mid,
+      );
 
       // ev.streams[0] already contains both scenevideo and sceneaudio grouped
       // by MSID — handle only video track events to avoid double-assignment.
@@ -139,7 +144,9 @@ async function startWebRTC(playbackUuid = null) {
 
       if (mid === "eyesvideo" && !webrtcPlaybackMode) {
         // eyesvideo has no paired audio — use its track directly
-        document.getElementById("eyesVideo").srcObject = new MediaStream([ev.track]);
+        document.getElementById("eyesVideo").srcObject = new MediaStream([
+          ev.track,
+        ]);
         document.getElementById("eyesPlaceholder").style.display = "none";
       } else if (!mid || mid === "scenevideo") {
         // ev.streams[0] groups scenevideo + sceneaudio together
@@ -149,6 +156,7 @@ async function startWebRTC(playbackUuid = null) {
         } else {
           document.getElementById("webrtcVideo").srcObject = stream;
           document.getElementById("webrtcPlaceholder").style.display = "none";
+          showSuccess("Live view started");
         }
       }
     };

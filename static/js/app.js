@@ -1,7 +1,7 @@
 /*
  * app.js - Socket connection, device controls, status updates, toast helpers
  *
- * Globals exposed: socket, MAX_POINTS, MAX_LINE_POINTS, showSuccess, showError
+ * Globals exposed: socket, MAX_POINTS, MAX_LINE_POINTS, showSuccess, showError, showInfo
  * Calls into: charts.js (clearCharts, handleGaze, handleIMU),
  *             recordings.js (loadRecordings, loadDeviceRecordings),
  *             webrtc.js (stopWebRTC, webrtcPeer)
@@ -22,10 +22,20 @@ socket.on("disconnect", () => {
 });
 
 let _wasConnected = false;
+let _wasRecording = false;
 socket.on("status_update", (s) => {
   updateStatus(s);
-  if (s.connected && !_wasConnected) loadDeviceRecordings();
+  if (s.connected && !_wasConnected) {
+    showSuccess("Connected to device");
+    loadDeviceRecordings();
+  } else if (!s.connected && _wasConnected) {
+    showInfo("Disconnected from device");
+  }
+  if (s.recording && !_wasRecording) {
+    showSuccess("Recording started");
+  }
   _wasConnected = s.connected;
+  _wasRecording = s.recording;
 });
 
 socket.on("error", (e) => showError(e.message));
@@ -51,7 +61,9 @@ socket.on("new_data", (d) => {
 socket.on("new_recording", (r) => {
   showSuccess(
     `Data saved: ${r.files.join(", ")} (${r.gaze_samples} gaze, ${r.imu_samples} IMU samples)`,
+    6000,
   );
+  showSuccess("Video saved to device", 6000);
   loadRecordings();
   loadDeviceRecordings();
 });
@@ -127,7 +139,7 @@ function connectDevice() {
     return;
   }
   document.getElementById("btnConnect").disabled = true;
-  showSuccess("Connecting...");
+  showInfo("Connecting...");
   socket.emit("connect_device", { hostname });
 }
 
@@ -190,9 +202,12 @@ function toast(message, { background, duration = 3500, close = false } = {}) {
   }).showToast();
 }
 
-const showSuccess = (msg) => toast(msg, { background: "#10b981" });
-const showError = (msg) =>
-  toast(msg, { background: "#ef4444", duration: 6000 });
+const showSuccess = (msg, duration) =>
+  toast(msg, { background: "#10b981", duration });
+const showError = (msg, duration) =>
+  toast(msg, { background: "#ef4444", duration: duration || 6000 });
+const showInfo = (msg, duration) =>
+  toast(msg, { background: "#6b7280", duration });
 
 // Initial load
 
