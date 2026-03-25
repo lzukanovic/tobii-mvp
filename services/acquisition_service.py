@@ -65,9 +65,8 @@ class AcquisitionService:
         try:
             run_coroutine_sync(self._async_connect(hostname))
         except Exception as e:
-            self.status.error = str(e) or repr(e)
-            self.socketio.emit('status_update', self.status.to_dict())
-            raise
+            logger.error("Error during connect: %s", e)
+            raise e
 
     async def _async_connect(self, hostname):
         """Async connection logic."""
@@ -99,7 +98,6 @@ class AcquisitionService:
                 )
 
         self.status.connected = True
-        self.status.error = None
 
         if self._webrtc_service:
             self._webrtc_service.set_connection(self._g3)
